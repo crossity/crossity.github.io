@@ -1,5 +1,4 @@
-this.main = this.main || {};
-this.main.js = (function (exports) {
+(function (exports) {
   'use strict';
 
   console.log("mylib.js loaded");
