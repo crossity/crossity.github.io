@@ -431,6 +431,75 @@
             return new Plat(verts);
         }
 
+        createIcosahedron() {
+            let verts = [];
+            let layer1 = [];
+            let layer2 = [];
+
+            let r = 1 / (2 * Math.sin(36 / 180 * Math.PI)); 
+            let d = Math.sqrt(1 - 2 * Math.sin(18 / 180 * Math.PI) * r);
+
+            for (let angle = 0; angle < 360; angle += 72) {
+                let a = angle / 180 * Math.PI;
+
+                layer1.push(vec3(r * Math.sin(a), r * Math.cos(a), d * 0.5));
+            }
+            for (let angle = 36; angle < 360; angle += 72) {
+                let a = angle / 180 * Math.PI;
+
+                layer2.push(vec3(r * Math.sin(a), r * Math.cos(a), -d * 0.5));
+            }
+            for (let i = 0; i < layer1.length; i++) {
+                let tri = [layer1[i], layer2[i], layer2[(i - 1 + 5) % 5]];
+                verts.push(tri);
+            }
+            for (let i = 0; i < layer2.length; i++) {
+                let tri = [layer2[i], layer1[i], layer1[(i + 1) % 5]];
+                verts.push(tri);
+            }
+
+            let top = vec3(0, 0, r), bottom = vec3(0, 0, -r);
+            for (let i = 0; i < 5; i++) {
+                verts.push([layer1[i], layer1[(i + 1) % 5], top]);
+                verts.push([layer2[i], layer2[(i + 1) % 5], bottom]);
+            }
+
+            return new Plat(verts);
+        } 
+        createDodecahedron() {
+            let verts = [];
+            let r = (Math.sqrt(10) * Math.sqrt(5 + Math.sqrt(5))) / 10;
+            let R = 0.25 * (1 + Math.sqrt(5)) * Math.sqrt(3);
+            let h = Math.sqrt(R * R - r * r);
+            let r0 = r * 2 * Math.cos(36 / 180 * Math.PI);
+            let d = Math.sqrt(R * R - r0 * r0);
+
+            let top = [], bottom = [];
+            let middle = [];
+
+            for (let angle = 0; angle < 360; angle += 72) {
+                let a = angle / 180 * Math.PI;
+                let b = (angle + 36) / 180 * Math.PI;
+
+                top.push(vec3(Math.sin(a) * r, Math.cos(a) * r, h));
+                bottom.push(vec3(Math.sin(b) * r, Math.cos(b) * r, -h));
+
+                middle.push(vec3(Math.sin(a) * r0, Math.cos(a) * r0, d));
+                middle.push(vec3(Math.sin(b) * r0, Math.cos(b) * r0, -d));
+            }
+
+            verts.push(top);
+            verts.push(bottom);
+
+            for (let i = 0; i < 5; i++) {
+                verts.push([top[i], middle[i * 2], middle[(i * 2 + 1) % 10], middle[(i * 2 + 2) % 10], top[(i + 1) % 5]]);
+                verts.push([bottom[i], middle[(i * 2 + 1) % 10], middle[(i * 2 + 2) % 10], middle[(i * 2 + 3) % 10], bottom[(i + 1) % 5]]);
+            }
+
+            //verts.push(middle);
+            return new Plat(verts);
+        }
+
         createPrim(rnd) {
             let inds = [];
             let v = [];
@@ -455,14 +524,16 @@
         }
     }
 
-    let rnd, rnd1, rnd2;
+    let rnd, rnd1, rnd2, rnd3, rnd4;
 
-    let prim, prim1, prim2;
+    let prim, prim1, prim2, prim3, prim4;
 
     function init() {
       rnd = new Render(document.getElementById("myCan"));
       rnd1 = new Render(document.getElementById("myCan1"));
       rnd2 = new Render(document.getElementById("myCan2"));
+      rnd3 = new Render(document.getElementById("myCan3"));
+      rnd4 = new Render(document.getElementById("myCan4"));
 
       /*
       let verts = [
@@ -491,12 +562,16 @@
       prim = new Prim(rnd, verts, inds);
       */
       let pl = new Plat([]);
-      pl = pl.createOctahedron();
+      pl = pl.createTetrohedron();
       prim = pl.createPrim(rnd);
       pl = pl.createCube();
       prim1 = pl.createPrim(rnd1);
-      pl = pl.createTetrohedron();
+      pl = pl.createOctahedron();
       prim2 = pl.createPrim(rnd2);
+      pl = pl.createIcosahedron();
+      prim3 = pl.createPrim(rnd3);
+      pl = pl.createDodecahedron();
+      prim4 = pl.createPrim(rnd4);
     }
 
     // Initialization
@@ -509,14 +584,20 @@
         let t = date.getMinutes() * 60 +
                 date.getSeconds() +
                 date.getMilliseconds() / 1000;
-        prim.world = rotate(t * 1, vec3(0, 1, 0)).mul(translate(vec3(0, Math.sin(t * 2), -10)));
+        prim.world = rotate(t * 1, vec3(0, 1, 0)).mul(translate(vec3(0, Math.sin(t * 2), -6)));
         prim.draw(rnd);
         rnd1.render();
-        prim1.world = rotate(t * 1, vec3(0, 1, 0)).mul(translate(vec3(0, Math.sin(t * 2), -10)));
+        prim1.world = rotate(t * 1, vec3(0, 1, 0)).mul(translate(vec3(0, Math.sin(t * 2), -6)));
         prim1.draw(rnd1);
         rnd2.render();
-        prim2.world = rotate(t * 1, vec3(0, 1, 0)).mul(translate(vec3(0, Math.sin(t * 2), -10)));
+        prim2.world = rotate(t * 1, vec3(0, 1, 0)).mul(translate(vec3(0, Math.sin(t * 2), -6)));
         prim2.draw(rnd2);
+        rnd3.render();
+        prim3.world = rotate(t * 1, vec3(0, 1, 0)).mul(translate(vec3(0, Math.sin(t * 2), -6)));
+        prim3.draw(rnd3);
+        rnd4.render();
+        prim4.world = rotate(t * 1, vec3(0, 1, 0)).mul(translate(vec3(0, Math.sin(t * 2), -6)));
+        prim4.draw(rnd4);
         window.requestAnimationFrame(draw);
       };
       draw();
