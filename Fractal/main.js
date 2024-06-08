@@ -137,6 +137,19 @@
     My = -(event.clientY - rect.top) / height + 1;
   } // End of 'onClick' function
 
+  window.addEventListener("load", () => {
+    init();
+    const draw = () => {
+        render();
+        window.requestAnimationFrame(draw);
+    };
+    draw();
+  });
+
+  window.addEventListener("mousemove", (e) => {
+    onClick(e);
+  });
+
   exports.init = init;
   exports.onClick = onClick;
   exports.render = render;
