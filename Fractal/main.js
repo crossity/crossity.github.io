@@ -8,7 +8,7 @@
     gl,
     timeLoc,
     mousePosLoc,
-    Mx, My;  
+    mousePos = {x: 0, y: 0}, lastMousePos, start = {x: -1, y: -1}, end = {x: 1, y: 1};  
 
   // WebGL initialization function.
   function init()
@@ -39,27 +39,28 @@
   
   in vec2 DrawPos;
   uniform float Time;
-  uniform vec2  MousePos;
+  uniform vec4  Coords;
   
   void main( void )
   {
-    vec2 C = vec2(-abs(sin(Time) * 0.5) * 0.5 + 0.5, 0.32);
+    vec2 C = vec2(0.5, 0.32); // vec2(-abs(sin(Time) * 0.5) * 0.5 + 0.5, 0.32);
     vec2 MouseFrame = vec2(0.8);
-    vec2 Start = MousePos * 2.0 - vec2(1) - MouseFrame * 0.5, End = MousePos * 2.0 - vec2(1) + MouseFrame * 0.5;
+    
+    vec2 Start = Coords.xy, End = Coords.zw;
 
     vec2 Z;
     Z.x = (DrawPos.x + 1.0) * 0.5 * (End.x - Start.x) + Start.x;
     Z.y = (DrawPos.y + 1.0) * 0.5 * (End.y - Start.y) + Start.y;
     vec2 Zn = Z;
     int n = -1;
-    int max_n = 25;
+    int max_n = 200;
 
     while (n++ < max_n && Zn.x * Zn.x + Zn.y * Zn.y <= 4.0)
     {
       Zn = vec2(Zn.x * Zn.x - Zn.y * Zn.y, Zn.x * Zn.y + Zn.x * Zn.y);
       Zn = Zn + C;
     }
-    float c = float(n) / float(max_n); 
+    float c = (float(n) / float(max_n)) * 2.0; 
     OutColor = vec4(c, c * 0.5, c * 0.8, 1.0);
   }
   `;
@@ -91,7 +92,7 @@
     
     // Uniform data
     timeLoc = gl.getUniformLocation(prg, "Time");
-    mousePosLoc = gl.getUniformLocation(prg, "MousePos");
+    mousePosLoc = gl.getUniformLocation(prg, "Coords");
     
     gl.useProgram(prg);
   } // End of 'init' function
@@ -122,7 +123,7 @@
         gl.uniform1f(timeLoc, t);
     }
     if (mousePosLoc != -1) {
-      gl.uniform2f(mousePosLoc, Mx, My);
+      gl.uniform4f(mousePosLoc, start.x, start.y, end.x, end.y);
     }
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   } // End of 'render' function
@@ -133,9 +134,41 @@
     let width = rect.right - rect.left + 1;
     let height = rect.bottom - rect.top + 1;
 
-    Mx = (event.clientX - rect.left) / width;
-    My = -(event.clientY - rect.top) / height + 1;
+    lastMousePos = {x: mousePos.x, y: mousePos.y};
+
+    mousePos.x = (event.clientX - rect.left) / width;
+    mousePos.y = -(event.clientY - rect.top) / height + 1;
+    
+    if (event.buttons == 1)
+    {
+      let size = {x: end.x - start.x, y: end.y - start.y};
+
+      start.x -= (mousePos.x - lastMousePos.x) * size.x;
+      start.y -= (mousePos.y - lastMousePos.y) * size.y;
+      end.x -= (mousePos.x - lastMousePos.x) * size.x;
+      end.y -= (mousePos.y - lastMousePos.y) * size.y;
+    }
   } // End of 'onClick' function
+
+  function zoom(dir) {
+    let size = {x: end.x - start.x, y: end.y - start.y};
+
+    let mp = {x: mousePos.x * 2 - 1, y: mousePos.y * 2 - 1};
+
+    let s = {x: mp.x * size.x + start.x, y: mp.y * size.y + start.y};
+    let e = {x: mp.x * size.x + end.x, y: mp.y * size.y + end.y};
+
+    let delta = -0.03 * dir * size.x;
+
+    s.x += delta, s.y += delta;
+    e.x -= delta, e.y -= delta;
+
+    start.x = s.x - mp.x * (size.x - delta * 2);
+    start.y = s.y - mp.y * (size.x - delta * 2);
+
+    end.x = e.x - mp.x * (size.x - delta * 2);
+    end.y = e.y - mp.y * (size.y - delta * 2);
+  } 
 
   window.addEventListener("load", () => {
     init();
@@ -144,6 +177,10 @@
         window.requestAnimationFrame(draw);
     };
     draw();
+  });
+
+  window.addEventListener("wheel", (e) => {
+    zoom(e.deltaY / Math.abs(e.deltaY));
   });
 
   window.addEventListener("mousemove", (e) => {
