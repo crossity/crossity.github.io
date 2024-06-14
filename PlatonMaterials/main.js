@@ -1,6 +1,17 @@
 (function () {
     'use strict';
 
+    class _vec2 {
+        constructor(x, y) {
+            this.x = x;
+            this.y = y;
+        }
+    }
+
+    function vec2(x, y) {
+        return new _vec2(0, 0);
+    }
+
     class _vec3 {
         constructor(x, y, z) {
             this.x = x;
@@ -197,6 +208,15 @@
         return m;
     }
 
+    function scale(s) {
+        return mat4(
+            s.x, 0, 0, 0,
+            0, s.y, 0, 0,
+            0, 0, s.z, 0,
+            0, 0, 0, 1
+        );
+    }
+
     class Camera {
         constructor(width, height, loc, at, up) {
             this.projSize = 0.1;
@@ -302,14 +322,15 @@
     }
 
     class _vertex {
-        constructor(pos, norm) {
+        constructor(pos, norm, texCoord) {
             this.pos = pos;
             this.norm = norm;
+            this.texCoord = texCoord;
         }
     }
 
-    function vertex(pos, norm) {
-        return new _vertex(pos, vec3());
+    function vertex(pos, norm, texCoord) {
+        return new _vertex(pos, vec3(), vec2());
     }
 
     function autoNormals(verts, inds) {
@@ -338,6 +359,14 @@
             verts[i].norm = verts[i].norm.norm();
     }
 
+    function clearEmpty(arr) {
+        for (let i = 0; i < arr.length; i++)
+            if (arr[i] == "") {
+                arr.splice(i, 1);
+                i--;
+            }
+    }
+
     class Prim {
         constructor(mtl, verts, inds) {
             this._init(mtl, verts, inds);
@@ -345,9 +374,15 @@
         _init(mtl, verts, inds) {
             let vtts = [], i = 0;
             this.mtl = mtl; 
-            this.verts = verts;
-            this.inds = inds;
-            this.loaded = true;
+            this.verts = [...verts];
+            this.inds = [...inds];
+            this.vertexArray = null;
+            this.vertexBuffer = null;
+            this.indexBuffer = null;
+            this.ubo = null;
+
+            if (mtl.shd.prg == null)
+                return;
 
             this.ubo = new UniformBlock(mtl.shd.rnd, "Prim", 64 * 2, 0);
 
@@ -358,6 +393,8 @@
                 vtts[i++] = el.norm.x;
                 vtts[i++] = el.norm.y;
                 vtts[i++] = el.norm.z;
+                vtts[i++] = el.texCoord.x;
+                vtts[i++] = el.texCoord.y;
             }
             this.vertexArray = mtl.shd.rnd.gl.createVertexArray();
             mtl.shd.rnd.gl.bindVertexArray(this.vertexArray);
@@ -366,13 +403,13 @@
             mtl.shd.rnd.gl.bindBuffer(mtl.shd.rnd.gl.ARRAY_BUFFER, this.vertexBuffer);
             mtl.shd.rnd.gl.bufferData(mtl.shd.rnd.gl.ARRAY_BUFFER, new Float32Array(vtts), mtl.shd.rnd.gl.STATIC_DRAW);
 
-            if (mtl.shd.prg == null)
-                this.loaded = false;
-            if (mtl.shd.attrs["InPosition"] != undefined && mtl.shd.attrs["InNormal"] != undefined) {
-                mtl.shd.rnd.gl.vertexAttribPointer(mtl.shd.attrs["InPosition"].loc, 3, mtl.shd.rnd.gl.FLOAT, false, 24, 0);
+            if (mtl.shd.attrs["InPosition"] != undefined && mtl.shd.attrs["InNormal"] != undefined && mtl.shd.attrs["InTexCoord"] != undefined) {
+                mtl.shd.rnd.gl.vertexAttribPointer(mtl.shd.attrs["InPosition"].loc, 3, mtl.shd.rnd.gl.FLOAT, false, 32, 0);
                 mtl.shd.rnd.gl.enableVertexAttribArray(mtl.shd.attrs["InPosition"].loc);
-                mtl.shd.rnd.gl.vertexAttribPointer(mtl.shd.attrs["InNormal"].loc, 3, mtl.shd.rnd.gl.FLOAT, false, 24, 12);
+                mtl.shd.rnd.gl.vertexAttribPointer(mtl.shd.attrs["InNormal"].loc, 3, mtl.shd.rnd.gl.FLOAT, false, 32, 12);
                 mtl.shd.rnd.gl.enableVertexAttribArray(mtl.shd.attrs["InNormal"].loc);
+                mtl.shd.rnd.gl.vertexAttribPointer(mtl.shd.attrs["InTexCoord"].loc, 2, mtl.shd.rnd.gl.FLOAT, false, 32, 24);
+                mtl.shd.rnd.gl.enableVertexAttribArray(mtl.shd.attrs["InTexCoord"].loc);
             }
 
             this.indexBuffer = mtl.shd.rnd.gl.createBuffer();
@@ -383,10 +420,39 @@
 
             this.world = mat4(1);
         }
+        async loadOBJ(dir) {
+            let vts = [], inds = [];
+
+            let file = await fetch(dir);
+            let text = await file.text();
+            let lines = text.split("\n");
+
+            for (let line of lines) {
+                if (line[0] == "v") {
+                    let p = line.split(" ");
+                    clearEmpty(p);
+
+                    let v = vec3(parseFloat(p[1]), parseFloat(p[2]), parseFloat(p[3]));
+
+                    vts.push(vertex(v));
+                }
+                if (line[0] == "f") {
+                    let block = line.split(" ");
+                    
+                    inds.push(parseInt(block[1].split("/")[0]) - 1);
+                    inds.push(parseInt(block[2].split("/")[0]) - 1);
+                    inds.push(parseInt(block[3].split("/")[0]) - 1);
+                }
+            }
+
+            autoNormals(vts, inds);
+
+            this._init(this.mtl, vts, inds);
+        }
         draw() {
-            if (this.mtl.shd.prg != null && !this.loaded)
+            if (this.mtl.shd.prg != null && this.vertexArray == null)
                 this._init(this.mtl, this.verts, this.inds);
-            if (!this.loaded)
+            if (this.mtl.shd.prg == null)
                 return;
 
             this.mtl.apply();
@@ -540,6 +606,18 @@
 
             autoNormals(v, inds);
 
+            let r = v[0].pos.len();
+            let rr = v[0].pos.x * v[0].pos.x + v[0].pos.z * v[0].pos.z;
+
+            rr = Math.sqrt(rr);
+
+            for (let i = 0; i < v.length; i++) {
+                v[i].texCoord.x = (Math.atan2(v[i].pos.x / rr, v[i].pos.z / rr) + Math.PI) / Math.PI * 0.5;
+                v[i].texCoord.y = (Math.acos(v[i].pos.y / r)) / Math.PI;
+                // v[i].texCoord.x = (Math.atan(v[i].pos.y / v[i].pos.x) + Math.PI / 2) / Math.PI;
+                // v[i].texCoord.y = Math.acos(v[i].pos.z / r) / Math.PI;
+            }
+
             return new Prim(mtl, v, inds);
         }
     }
@@ -657,16 +735,97 @@
         }
     }
 
+    function isPowerOf2(value) {
+    return (value & (value - 1)) === 0;
+    }
+
+    class Texture {
+        constructor(gl, url) {
+            this.gl = gl;
+            this.url = url;
+
+            this.tex = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, this.tex);
+
+            this.level = 0;
+            this.internalFormat = gl.RGBA;
+            this.width = 1;
+            this.height = 1;
+            this.border = 0;
+            this.srcFormat = gl.RGBA;
+            this.srcType = gl.UNSIGNED_BYTE;
+
+            const pixel = new Uint8Array([0, 0, 255, 255]); // opaque blue
+            gl.texImage2D(
+                gl.TEXTURE_2D,
+                this.level,
+                this.internalFormat,
+                this.width,
+                this.height,
+                this.border,
+                this.srcFormat,
+                this.srcType,
+                pixel,
+            );
+
+            this.image = new Image();
+            this.image.onload = () => {
+                gl.bindTexture(gl.TEXTURE_2D, this.tex);
+                gl.texImage2D(
+                    gl.TEXTURE_2D,
+                    this.level,
+                    this.internalFormat,
+                    this.srcFormat,
+                    this.srcType,
+                    this.image,
+                );
+                
+                if (isPowerOf2(this.image.width) && isPowerOf2(this.image.height)) {
+                    // Yes, it's a power of 2. Generate mips.
+                    this.gl.generateMipmap(this.gl.TEXTURE_2D);
+                } else {
+                    // No, it's not a power of 2. Turn off mips and set
+                    // wrapping to clamp to edge
+                    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
+                    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
+                    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR);
+                }
+            };
+                
+            this.image.src = url;
+        }
+    }
+
     class Material {
         constructor(shd, ka, kd, ks, ph, trans) {
             this.shd = shd;
 
-            this.ubo = new UniformBlock(shd.rnd, "Material", 16 * 3, 2);
-            this.ubo.update(0, new Float32Array([ka.x, ka.y, ka.z, 0, kd.x, kd.y, kd.z, trans, ks.x, ks.y, ks.z, ph]));
+            this.ubo = new UniformBlock(shd.rnd, "Material", 16 * 4, 2);
+            this.ubo.update(0, new Float32Array([ka.x, ka.y, ka.z, 0, kd.x, kd.y, kd.z, trans, ks.x, ks.y, ks.z, ph, 0, 0, 0, 0]));
+
+            this.textures = [null, null, null, null];
+            this.textureFlags = [false, false, false, false];
+        }
+        setTexture(ind, tex) {
+            if (ind >= this.textureFlags.length)
+                return;
+
+            this.textures[ind] = tex;
+            this.textureFlags = true;
+
+            this.ubo.update(16 * 3, new Float32Array([this.textureFlags]));
         }
         apply() {
             if (this.shd.apply()) {
                 this.ubo.apply(this.shd);
+
+                for (let i = 0; i < this.textureFlags.length; i++) {
+                    if (!this.textureFlags[i])
+                        continue;
+
+                    rnd.gl.activeTexture(this.shd.rnd.gl.TEXTURE0 + i);
+                    rnd.gl.bindTexture(this.shd.rnd.gl.TEXTURE_2D, this.textures[i].tex);
+                }
                 return true;
             }
             return false;
@@ -674,16 +833,24 @@
     }
 
     let 
-      rnd, prim, shd, mtl, prim1, mtl1;
+      rnd$1, prim, shd, mtl, prim1, mtl1;
+    let tex;
 
     function init() {
-      rnd = new Render(document.getElementById("myCan"));
+      rnd$1 = new Render(document.getElementById("myCan"));
 
       let pl = new Plat([]);
       pl = pl.createDodecahedron();
 
-      shd = new Shader(rnd, "default");
+      shd = new Shader(rnd$1, "default");
       mtl = new Material(shd, vec3(0, 0, 0), vec3(1, 0, 1), vec3(1, 1, 1), 10, 1);
+
+      tex = new Texture(rnd$1.gl, "./bin/textures/a.png");
+      mtl.setTexture(0, tex);
+      /*
+      prim = new Prim(mtl, [], []);// pl.createPrim(mtl);
+      prim.loadOBJ("bin/models/untitled1.obj");
+      */
 
       prim = pl.createPrim(mtl);
 
@@ -700,15 +867,16 @@
       init();
 
       const draw = () => {
-        rnd.renderStart();
+        rnd$1.renderStart();
+
         const date = new Date();
         let t = date.getMinutes() * 60 +
                 date.getSeconds() +
                 date.getMilliseconds() / 1000;
-        prim.world = rotate(t * 1, vec3(0, 1, 0)).mul(translate(vec3(-1, Math.sin(t * 2), -6)));
-        prim.draw(rnd);
+        prim.world = scale(vec3(0.8)).mul(rotate(t * 1, vec3(0, 1, 0)).mul(translate(vec3(-1, Math.sin(t * 2), -6))));
+        prim.draw(rnd$1);
         prim1.world = rotate(t * 1, vec3(0, 1, 0)).mul(translate(vec3(1, Math.sin(t * 4) * 2, -6)));
-        prim1.draw(rnd);
+        prim1.draw(rnd$1);
         window.requestAnimationFrame(draw);
       };
       draw();
