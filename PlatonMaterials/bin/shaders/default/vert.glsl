@@ -2,10 +2,11 @@
 precision highp float;
 in vec3 InPosition;
 in vec3 InNormal;
+in vec2 InTexCoord;
     
 out vec3 DrawPos;
 out vec3 DrawNormal;
-uniform float Time;
+out vec2 DrawTexCoord;
 
 uniform Prim
 {
@@ -17,4 +18,5 @@ void main( void )
     DrawPos = vec3(MatW * vec4(InPosition, 1));
     gl_Position = MatWVP * vec4(InPosition, 1);
     DrawNormal = mat3(transpose(inverse(MatW))) * InNormal;
+    DrawTexCoord = InTexCoord;
 }
