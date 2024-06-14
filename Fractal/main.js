@@ -60,7 +60,7 @@
       Zn = vec2(Zn.x * Zn.x - Zn.y * Zn.y, Zn.x * Zn.y + Zn.x * Zn.y);
       Zn = Zn + C;
     }
-    float c = (float(n) / float(max_n)) * 2.0; 
+    float c = (float(n) / float(max_n)) * 4.0; 
     OutColor = vec4(c, c * 0.5, c * 0.8, 1.0);
   }
   `;
