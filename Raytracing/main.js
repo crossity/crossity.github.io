@@ -584,14 +584,11 @@
             if (!loaded)
                 return false;
 
-            const date = new Date();
-            let t = date.getMinutes() * 60 +
-                    date.getSeconds() +
-                    date.getMilliseconds() / 1000;
-
             if (this.shd.uniforms["Time"] != undefined)
-                this.shd.rnd.gl.uniform1f(this.shd.uniforms["Time"].loc, t);
-            
+                this.shd.rnd.gl.uniform1f(this.shd.uniforms["Time"].loc, this.shd.rnd.timer.globalTime);
+            if (this.shd.uniforms["DeltaTime"] != undefined)
+                this.shd.rnd.gl.uniform1f(this.shd.uniforms["DeltaTime"].loc, this.shd.rnd.timer.globalDeltaTime);
+
             if (this.shd.apply() && this.shd.uniformBlocks[Material] != undefined) {
                 this.ubo.apply(this.shd);
 
@@ -608,6 +605,44 @@
                 return true;
             }
             return false;
+        }
+    }
+
+    class Timer {
+        constructor() {
+            this.getTime = () => {
+                const date = new Date();
+                let t =
+                  date.getMilliseconds() / 1000.0 +
+                  date.getSeconds() +
+                  date.getMinutes() * 60;
+                return t;
+            };
+
+            this.oldGlobalTime = this.getTime();
+            this.frameCounter = 0;
+            this.isPause = false;
+            this.localTime = this.startTime = this.oldGlobalTime;
+            this.globalTime = this.oldGlobalTime;
+            this.globalDeltaTime = 0;
+            this.localTime = this.globalTime;
+            this.localDeltaTime = 0;
+            this.pauseTime = 0;
+        }
+
+        update() {
+            this.globalTime = this.getTime();
+            this.globalDeltaTime = this.globalTime - this.oldGlobalTime;
+
+            if (this.isPause) {
+                this.localDeltaTime = 0;
+                this.pauseTime += this.globalTime - this.oldGlobalTime;
+            } else {
+                this.localDeltaTime = this.globaLDeltaTime;
+                this.localTime = this.globalTime - this.pauseTime - this.startTime;
+            }
+
+            this.oldGlobalTime = this.globalTime;
         }
     }
 
@@ -651,10 +686,15 @@
             this.mtl = new Material(this.shd, vec3(0, 0, 0), vec3(0, 0, 1), vec3(1, 1, 1), 10, 1);
 
             this.prim = new Prim(this.mtl, [vertex(vec3(-1, -1, 0.2)), vertex(vec3(3, -1, 0.2)), vertex(vec3(-1, 3, 0.2))], [0, 1, 2]);
+
+            // Timer initialization
+            this.timer = new Timer();
         } // End of 'constructor' function
 
         // WebGL rendering function.
-        renderStart() { 
+        renderStart() {
+            this.timer.update();
+
             // this.gl.clear(this.gl.COLOR_BUFFER_BIT);
             this.gl.clear(this.gl.DEPTH_BUFFER_BIT);
 
@@ -693,12 +733,12 @@
     let rnd;
     let rm, rmshd, rmmtl;
 
-    let framesStill = 0;
+    let framesStill = -1;
 
     function init() {
       rnd = new Render(document.getElementById("myCan"));
 
-      rmshd = new Shader(rnd, "raymarching");
+      rmshd = new Shader(rnd, "raytracing");
       rmmtl = new Material(rmshd, vec3(0, 0, 0), vec3(0, 0, 1), vec3(1, 1, 1), 10, 1);
 
       rm = new RaymarchingObject(rmmtl);
@@ -738,7 +778,7 @@
 
     let mousePos = {x: 0, y: 0}, lastMousePos;
 
-    let sens = 3, speed = 0.1;
+    let sens = 2, speed = 5;
 
     let anglex = 0, angley = 0;
 
@@ -776,8 +816,12 @@
     document.addEventListener("keypress", (e) => {
       if (e.key == 'w') {
         framesStill = 1;
-        let delta = rnd.camera.dir.mul(speed);
-
+        let delta = rnd.camera.dir.mul(speed * rnd.timer.globalDeltaTime);
+        rnd.camera.update(rnd.camera.loc.add(delta), rnd.camera.at.add(delta), vec3(0, 1, 0));
+      }
+      if (e.key == 's') {
+        framesStill = 1;
+        let delta = rnd.camera.dir.mul(-speed * rnd.timer.globalDeltaTime);
         rnd.camera.update(rnd.camera.loc.add(delta), rnd.camera.at.add(delta), vec3(0, 1, 0));
       }
     });
