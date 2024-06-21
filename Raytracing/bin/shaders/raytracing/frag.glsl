@@ -5,7 +5,8 @@ in vec3 DrawNormal;
 in vec3 DrawPos;
 in vec2 DrawTexCoord;
 
-out vec4 OutColor;
+layout(location = 0) out vec4 OutColor;
+layout(location = 1) out vec4 OutIndex;
 
 uniform Camera 
 {
@@ -29,11 +30,13 @@ uniform Material
     vec4 TexFlags; /* Textures flags */
 };
 
-uniform sampler2D uSampler;
+uniform sampler2D Texture0;
+uniform sampler2D Texture1;
 uniform float uSamplePart;
 
 uniform float Time;
 uniform float DeltaTime;
+uniform float Random;
 
 #define Ka Ka4.xyz
 #define Kd KdTrans.xyz
@@ -78,22 +81,24 @@ vec3 RandomOnSphere(vec3 dir) {
 #define TYPE_GLASS 2
 
 #define FigureSphere    0
-#define FigureSubSphere 1
-#define FigureBox       2
-#define FigurePlane     3
+#define FigureBox       1
+#define FigurePlane     2
+
+#define OpPut 0
+#define OpSub 1
 
 struct OBJECT
 {
     vec3 Pos, Color;
-    float R, K, M;
-    int Type, Figure;
+    float R, K;
+    int Type, Figure, Op;
 };
 
 struct INTERSECTION
 {
     vec3 Pos, NewDir, N;
     int ObjInd;
-    float MinDist;
+    float MinDist, RefDist;
 };
 
 #define NumOfObjects 6
@@ -107,16 +112,16 @@ float SphereDistance(vec3 c, float r, vec3 pos)
     return distance(c, pos) - r;
 }
 
-float SubSphereDistance(vec3 c, float r, vec3 pos) 
-{
-    return r - distance(c, pos);
-}
-
 float BoxDistance(vec3 c, float r, vec3 pos)
 {
     vec3 d = abs(pos - c) - r;
     float box = min(max(d.x, max(d.y, d.z)), 0.0) + length(max(d, 0.0));
     return box;
+}
+
+float PlnaeDistance(vec3 n, float d, vec3 pos)
+{
+    return abs(dot(pos, n) - d);
 }
 
 
@@ -125,10 +130,10 @@ float DistanceHandler(int ObjectInd, vec3 pos)
 {
     if (Objects[ObjectInd].Figure == FigureSphere)
         return SphereDistance(Objects[ObjectInd].Pos, Objects[ObjectInd].R, pos);
-    else if (Objects[ObjectInd].Figure == FigureSubSphere)
-        return SubSphereDistance(Objects[ObjectInd].Pos, Objects[ObjectInd].R, pos);
     else if (Objects[ObjectInd].Figure == FigureBox)
         return BoxDistance(Objects[ObjectInd].Pos, Objects[ObjectInd].R, pos);
+    else if (Objects[ObjectInd].Figure == FigurePlane)
+        return PlnaeDistance(Objects[ObjectInd].Pos, Objects[ObjectInd].R, pos);
 }
 
 INTERSECTION GetDistance(vec3 pos)
@@ -139,36 +144,37 @@ INTERSECTION GetDistance(vec3 pos)
     intersection.MinDist = INF;
 
     for (int i = 0; i < NumOfObjects; i++) 
+    {
+        float dist = DistanceHandler(i, pos);
+
+        if (Objects[i].Op == OpSub)
         {
-            float dist = DistanceHandler(i, pos);
-
-            if (Objects[i].Figure == FigureSubSphere)
-            {
-                if (dist > MaxSubDist)
-                    MaxSubDist = dist;
-            }
-            else
-                if (dist < intersection.MinDist)
-                {
-                    intersection.MinDist = dist;
-                    intersection.Pos = pos;
-                    intersection.ObjInd = i;
-                }
+            dist = -dist;
+            if (dist > MaxSubDist)
+                MaxSubDist = dist;
         }
+        else
+            if (dist < intersection.MinDist)
+            {
+                intersection.MinDist = dist;
+                intersection.Pos = pos;
+                intersection.ObjInd = i;
+            }
+    }
 
-        if (intersection.MinDist < MaxSubDist)
-            intersection.MinDist = MaxSubDist;
+    if (intersection.MinDist < MaxSubDist)
+        intersection.MinDist = MaxSubDist;
     return intersection;
 }
 
-vec3 GetNormal(vec3 pos, float d) 
+vec3 GetNormal(vec3 pos) 
 {
-    vec2 e = vec2(0.01, 0.0);
+    vec2 e = vec2(0.0001, 0.0);
 
-    vec3 n = d - vec3(
-        GetDistance(pos - e.xyy).MinDist,
-        GetDistance(pos - e.yxy).MinDist,
-        GetDistance(pos - e.yyx).MinDist
+    vec3 n = vec3(
+        GetDistance(pos + e.xyy).MinDist - GetDistance(pos - e.xyy).MinDist,
+        GetDistance(pos + e.yxy).MinDist - GetDistance(pos - e.yxy).MinDist,
+        GetDistance(pos + e.yyx).MinDist - GetDistance(pos - e.yyx).MinDist
     );
 
     return normalize(n);
@@ -181,48 +187,64 @@ INTERSECTION RayCast(vec3 pos, vec3 dir, float maxLen)
 
     vec3 start = pos;
 
-    int MaxIts = 100000, i = 0;
+    int MaxIts = 1000000, i = 0;
+    float RefDist = 0.0;
 
-    do {
-        vec3 R = vec3(0), a;
-        float t;
-
+    while (distance2(pos, start) < maxLen * maxLen && i < MaxIts)
+    {
+        RefDist = intersection.MinDist;
         intersection = GetDistance(pos);
 
+        if (intersection.MinDist <= ZERO)
+            break;
         pos = pos + dir * intersection.MinDist;
 
         i++;
-    } while (intersection.MinDist > ZERO && distance2(pos, start) < maxLen * maxLen && i < MaxIts);
+    };
 
+    if (intersection.MinDist <= ZERO)
+    {
+        intersection.Pos = intersection.Pos + dir * (intersection.MinDist - ZERO * 0.0);
+        intersection.MinDist = 0.0;
+    }
     intersection.NewDir = dir;
-    intersection.N = GetNormal(intersection.Pos, intersection.MinDist);
-    intersection.N = faceforward(intersection.N, pos - Loc, intersection.N);
-    // intersection.N = normalize(intersection.N);
+    intersection.N = GetNormal(intersection.Pos);
+    // intersection.N = faceforward(intersection.N, pos - start, intersection.N);
+    intersection.RefDist = RefDist;
+    intersection.N = normalize(intersection.N);
     return intersection;
 }
 
 vec3 RayTrace(vec3 pos, vec3 dir, float maxLen)
 {
-    vec3 color = vec3(1);
+    vec3 color = vec3(1), n = vec3(0);
+    float PrevDist = 0.0;
     
     for (int i = 0; i < 100; i++) 
     {
-        INTERSECTION intersection = RayCast(pos + dir * 0.2, dir, maxLen);
+        INTERSECTION intersection = RayCast(pos + n * ZERO * 2.0, dir, maxLen);
 
         pos = intersection.Pos;
         dir = intersection.NewDir;
-        vec3 n = intersection.N;
+        n = intersection.N;
+
+        PrevDist = intersection.RefDist;
 
         // return (n + vec3(1.0)) * 0.5; 
 
+        // return intersection.MinDist * vec3(1);
+
         if (intersection.MinDist <= ZERO) {
+            if (i == 0)
+                OutIndex = vec4(intersection.ObjInd) / 255.0;
+
             vec3 col = Objects[intersection.ObjInd].Color;
             color *= col;
 
             int type = Objects[intersection.ObjInd].Type;
 
             if (type == TYPE_BASIC) {
-                vec3 rand = RandomOnSphere(dir * vec3(float(RayCount) + mod(Time, 1000.0)) + gl_FragCoord.xyz);
+                vec3 rand = RandomOnSphere(dir * vec3(float(RayCount) + Random + mod(Time, 1000.0) / 1000.0) + gl_FragCoord.xyz);
                 rand = reflect(dir, n) * (1.0 - Objects[intersection.ObjInd].K) + rand * Objects[intersection.ObjInd].K;
 
                 dir = normalize(rand * dot(n, rand));
@@ -235,12 +257,12 @@ vec3 RayTrace(vec3 pos, vec3 dir, float maxLen)
         else
         {
             color *= vec3(0.6, 0.6, 1);
-
-            return color;
+            OutIndex = vec4(1);
+            return 0.0 * color;
         }
     }
 
-    return vec3(0.0);
+    return vec3(0);
 }
 
 vec3 ToneMap(vec3 col)
@@ -253,61 +275,86 @@ vec3 ToneMap(vec3 col)
     return col;
 }
 
+#define FLOATS_IN_OBJECT 11
+
+void LoadScene()
+{
+    for (int i = 0; i < NumOfObjects; i++)
+    {
+        int j = i * FLOATS_IN_OBJECT;
+
+        Objects[i].Pos.x = texelFetch(Texture1, ivec2(j + 0, 0), 0).r;
+        Objects[i].Pos.y = texelFetch(Texture1, ivec2(j + 1, 0), 0).r;
+        Objects[i].Pos.z = texelFetch(Texture1, ivec2(j + 2, 0), 0).r;
+        Objects[i].Color.x = texelFetch(Texture1, ivec2(j + 3, 0), 0).r;
+        Objects[i].Color.y = texelFetch(Texture1, ivec2(j + 4, 0), 0).r;
+        Objects[i].Color.z = texelFetch(Texture1, ivec2(j + 5, 0), 0).r;
+        Objects[i].R = texelFetch(Texture1, ivec2(j + 6, 0), 0).r;
+        Objects[i].K = texelFetch(Texture1, ivec2(j + 7, 0), 0).r;
+        Objects[i].Type = int(texelFetch(Texture1, ivec2(j + 8, 0), 0).r);
+        Objects[i].Figure = int(texelFetch(Texture1, ivec2(j + 9, 0), 0).r);
+        Objects[i].Op = int(texelFetch(Texture1, ivec2(j + 10, 0), 0).r);
+    }
+}
+
 void main( void )
 {
     float aspectRatio = Size.x / Size.y;
     vec2 ps = gl_FragCoord.xy / Size * 2.0 - vec2(aspectRatio, 1);
-    float near = ProjDist * 2.0 / ProjSize, far = 30.0;
+    float near = ProjDist * 2.0 / ProjSize, far = 100.0;
     vec3 dir = normalize(ps.x * Right + ps.y * Up + Dir * near);
     vec3 pos = dir + Loc;
 
-    Objects[0].Pos = vec3(0.5 - 0.8, 3.0 - 2.0, -10.0);
-    Objects[0].R = 1.0;
-    Objects[0].Color = vec3(0.9, 0.9, 0.9);
-    Objects[0].Type = TYPE_BASIC;
-    Objects[0].K = 1.0;
-    Objects[0].M = 1.0;
-    Objects[0].Figure = FigureSubSphere;
+    // Objects[0].Pos = vec3(0.5 - 0.8, 3.0 - 2.0, -10.0);
+    // Objects[0].R = 1.0;
+    // Objects[0].Color = vec3(0.9, 0.9, 0.9);
+    // Objects[0].Type = TYPE_BASIC;
+    // Objects[0].K = 1.0;
+    // Objects[0].Figure = FigureSphere;
+    // Objects[0].Op = OpSub;
 
-    Objects[1].Pos = vec3(-0.8, -0.8, -10.0);
-    Objects[1].R = 2.0;
-    Objects[1].Color = vec3(0.9, 0.9, 0.9);
-    Objects[1].Type = TYPE_BASIC;
-    Objects[1].K = 1.0;
-    Objects[1].M = 1.0;
-    Objects[1].Figure = FigureSphere;
+    // Objects[1].Pos = vec3(-0.8, -0.8, -10.0);
+    // Objects[1].R = 2.0;
+    // Objects[1].Color = vec3(0.9, 0.9, 0.9);
+    // Objects[1].Type = TYPE_BASIC;
+    // Objects[1].K = 1.0;
+    // Objects[1].Figure = FigureSphere;
+    // Objects[1].Op = OpPut;
 
-    Objects[2].Pos = vec3(0.5, 0.0, -6.0);
-    Objects[2].R = 0.5;
-    Objects[2].Color = vec3(1, 1, 1);
-    Objects[2].Type = TYPE_LIGHT;
-    Objects[2].K = 0.7;
-    Objects[2].M = 0.0;
-    Objects[2].Figure = FigureSphere;
+    // // R = 0.5 pos = 0.5, 0.0, -6.0
+    // Objects[2].Pos = normalize(vec3(1));
+    // Objects[2].R = 10.0;
+    // Objects[2].Color = vec3(1, 1, 1);
+    // Objects[2].Type = TYPE_LIGHT;
+    // Objects[2].K = 0.7;
+    // Objects[2].Figure = FigurePlane;
+    // Objects[2].Op = OpPut;
 
-    Objects[3].Pos = vec3(2.5, 1.3, -10.0);
-    Objects[3].R = 1.5;
-    Objects[3].Color = vec3(1, 0.5, 1);
-    Objects[3].Type = TYPE_BASIC;
-    Objects[3].K = 0.0;
-    Objects[3].M = 1.0;
-    Objects[3].Figure = FigureSphere;
+    // Objects[3].Pos = vec3(2.5, 1.3, -10.0);
+    // Objects[3].R = 1.5;
+    // Objects[3].Color = vec3(1, 0.5, 1);
+    // Objects[3].Type = TYPE_BASIC;
+    // Objects[3].K = 0.03;
+    // Objects[3].Figure = FigureSphere;
+    // Objects[3].Op = OpPut;
 
-    Objects[4].Pos = vec3(2.5, -2.0, -10.0);
-    Objects[4].R = 1.3;
-    Objects[4].Color = vec3(0.7, 0.2, 0.9);
-    Objects[4].Type = TYPE_BASIC;
-    Objects[4].K = 0.1;
-    Objects[4].M = 1.0;
-    Objects[4].Figure = FigureSphere;
+    // Objects[4].Pos = vec3(2.5, -2.0, -10.0);
+    // Objects[4].R = 1.3;
+    // Objects[4].Color = vec3(0.7, 0.2, 0.9);
+    // Objects[4].Type = TYPE_BASIC;
+    // Objects[4].K = 0.1;
+    // Objects[4].Figure = FigureSphere;
+    // Objects[4].Op = OpPut;
 
-    Objects[5].Pos = vec3(0, -12, -5);
-    Objects[5].R = 10.0;
-    Objects[5].Color = vec3(0.9, 0.9, 0.9);
-    Objects[5].Type = TYPE_BASIC;
-    Objects[5].K = 0.5;
-    Objects[5].M = 1.0;
-    Objects[5].Figure = FigureBox;
+    // Objects[5].Pos = vec3(0, -12, -5);
+    // Objects[5].R = 10.0;
+    // Objects[5].Color = vec3(0.9, 0.9, 0.9);
+    // Objects[5].Type = TYPE_BASIC;
+    // Objects[5].K = 1.0;
+    // Objects[5].Figure = FigureBox;
+    // Objects[5].Op = OpPut;
+
+    LoadScene();
 
     vec3 color = vec3(0);
     int MaxRayCount = 4;
@@ -315,7 +362,7 @@ void main( void )
     for (RayCount = 0; RayCount < MaxRayCount; RayCount++)
         color += RayTrace(pos, dir, far);
     color = color / float(MaxRayCount);
-    vec3 prevColor = texelFetch(uSampler, ivec2(gl_FragCoord.xy), 0).xyz;
+    vec3 prevColor = texelFetch(Texture0, ivec2(gl_FragCoord.xy), 0).xyz;
     color = ToneMap(color);
     color = mix(color, prevColor, 1.0 - uSamplePart);
     OutColor = vec4(color, 1);
