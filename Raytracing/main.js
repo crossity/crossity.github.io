@@ -872,7 +872,7 @@
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         }
 
-        draw(framesStill) {
+        draw(framesStill, editObject) {
             let rnd = this.mtl.shd.rnd;
 
             rnd.gl.disable(rnd.gl.DEPTH_TEST);
@@ -887,6 +887,8 @@
                 this.mtl.shd.rnd.gl.uniform1f(this.mtl.shd.uniforms["uSamplePart"].loc, 1 / framesStill);
             if (applied && this.mtl.shd.uniforms["Random"] != undefined)
                 this.mtl.shd.rnd.gl.uniform1f(this.mtl.shd.uniforms["Random"].loc, Math.random());
+            if (applied && this.mtl.shd.uniforms["EditObject"] != undefined)
+                this.mtl.shd.rnd.gl.uniform1i(this.mtl.shd.uniforms["EditObject"].loc, editObject);
             this.prim.draw(rnd);
             rnd.gl.enable(rnd.gl.DEPTH_TEST);
             rnd.gl.bindTexture(rnd.gl.TEXTURE_2D, null);
@@ -927,7 +929,7 @@
         framesStill = 1;
         */
 
-        rm.draw(framesStill);
+        rm.draw(framesStill, editObject);
 
         rnd.renderEnd();
         window.requestAnimationFrame(draw);
@@ -958,15 +960,15 @@
 
         framesStill = 1;
 
-        if (EditObject != -1) {
-          let pos = rm.objects[EditObject].pos.sub(rnd.camera.loc);
+        if (editObject != -1) {
+          let pos = rm.objects[editObject].pos.sub(rnd.camera.loc);
           let d = pos.dot(rnd.camera.dir);
 
           let mx = d / rnd.camera.projDist * delta.x * rnd.camera.projSize;
           let my = d / rnd.camera.projDist * delta.y * rnd.camera.projSize;
 
-          rm.objects[EditObject].pos = rm.objects[EditObject].pos.add(rnd.camera.right.mul(mx));
-          rm.objects[EditObject].pos = rm.objects[EditObject].pos.add(rnd.camera.up.mul(my));
+          rm.objects[editObject].pos = rm.objects[editObject].pos.add(rnd.camera.right.mul(mx));
+          rm.objects[editObject].pos = rm.objects[editObject].pos.add(rnd.camera.up.mul(my));
           rm.updateTexture();
         } else {
           anglex += delta.y * sens;
@@ -995,7 +997,7 @@
       gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, outputBuffer);
     }
 
-    let EditObject = -1;
+    let editObject = -1;
 
     document.addEventListener("keypress", (e) => {
       if (e.key == 'w') {
@@ -1009,13 +1011,13 @@
         rnd.camera.update(rnd.camera.loc.add(delta), rnd.camera.at.add(delta), vec3(0, 1, 0));
       }
       if (e.key == 'f') {
-        EditObject = -1;
+        editObject = -1;
       }
       if (e.key == 'c') {
-        if (EditObject != -1) {
-          rm.objects[EditObject].op = OP_SUB;
+        if (editObject != -1) {
+          rm.objects[editObject].op = OP_SUB;
           rm.updateTexture();
-          EditObject = -1;
+          editObject = -1;
           framesStill = 1;
         }
       }
@@ -1026,11 +1028,12 @@
         let data = new Uint8Array(4);
 
         readPixel(mousePos.x * rnd.width, mousePos.y * rnd.height, rnd.targets[rnd.curTarget].indexes, data);
-        if (data[0] == 255 || data[0] == EditObject)
-          EditObject = -1;
+        if (data[0] == 255 || data[0] == editObject)
+          editObject = -1;
         else
-          EditObject = data[0];
+          editObject = data[0];
         e.preventDefault();
+        framesStill = 1;
       }
     });
 

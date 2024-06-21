@@ -38,6 +38,8 @@ uniform float Time;
 uniform float DeltaTime;
 uniform float Random;
 
+uniform int EditObject;
+
 #define Ka Ka4.xyz
 #define Kd KdTrans.xyz
 #define Trans KdTrans.w
@@ -215,6 +217,8 @@ INTERSECTION RayCast(vec3 pos, vec3 dir, float maxLen)
     return intersection;
 }
 
+#define OUTLINE_SIZE 0.05
+
 vec3 RayTrace(vec3 pos, vec3 dir, float maxLen)
 {
     vec3 color = vec3(1), n = vec3(0);
@@ -234,9 +238,16 @@ vec3 RayTrace(vec3 pos, vec3 dir, float maxLen)
 
         // return intersection.MinDist * vec3(1);
 
+        // return vec3(EditObject) / 6.0;
+
         if (intersection.MinDist <= ZERO) {
             if (i == 0)
                 OutIndex = vec4(intersection.ObjInd) / 255.0;
+            
+            if (i == 0 && intersection.ObjInd == EditObject && (mod(pos.x, 0.2) - OUTLINE_SIZE < 0.0 || mod(pos.y, 0.2) - OUTLINE_SIZE < 0.0 || mod(pos.z, 0.2) - OUTLINE_SIZE < 0.0))
+            {
+                return vec3(0.1, 0.5, 0.9);
+            }
 
             vec3 col = Objects[intersection.ObjInd].Color;
             color *= col;
@@ -261,7 +272,7 @@ vec3 RayTrace(vec3 pos, vec3 dir, float maxLen)
             return 0.0 * color;
         }
     }
-
+    OutIndex = vec4(1);
     return vec3(0);
 }
 
