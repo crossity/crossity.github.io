@@ -48,7 +48,10 @@
             return Math.sqrt(this.len2());
         }
         norm() {
-            return vec3(this.div(this.len()));
+            let len = this.len();
+            if (len == 0)
+                return vec3(this);
+            return vec3(this.div(len));
         }
         mulmat(m) {
             let w = this.x * m.a[0][3] + this.y * m.a[1][3] + this.z * m.a[2][3] + m.a[3][3];
@@ -832,11 +835,13 @@
         }
 
         updateTexture() {
-            const data = new Float32Array(FLOATS_IN_OBJECT * this.objects.length);
+            const data = new Float32Array(FLOATS_IN_OBJECT * this.objects.length + 1);
             let gl = this.mtl.shd.rnd.gl;
 
+            data[0] = this.objects.length;
+
             for (let i = 0; i < this.objects.length; i++) {
-                let j = i * FLOATS_IN_OBJECT;
+                let j = i * FLOATS_IN_OBJECT + 1;
 
                 data[j + 0] = this.objects[i].pos.x;
                 data[j + 1] = this.objects[i].pos.y;
@@ -872,7 +877,7 @@
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         }
 
-        draw(framesStill, editObject) {
+        draw(framesStill, editObject, raysCount, mode) {
             let rnd = this.mtl.shd.rnd;
 
             rnd.gl.disable(rnd.gl.DEPTH_TEST);
@@ -889,6 +894,11 @@
                 this.mtl.shd.rnd.gl.uniform1f(this.mtl.shd.uniforms["Random"].loc, Math.random());
             if (applied && this.mtl.shd.uniforms["EditObject"] != undefined)
                 this.mtl.shd.rnd.gl.uniform1i(this.mtl.shd.uniforms["EditObject"].loc, editObject);
+            if (applied && this.mtl.shd.uniforms["MaxRayCount"] != undefined)
+                this.mtl.shd.rnd.gl.uniform1i(this.mtl.shd.uniforms["MaxRayCount"].loc, raysCount);
+            if (applied && this.mtl.shd.uniforms["Mode"] != undefined)
+                this.mtl.shd.rnd.gl.uniform1i(this.mtl.shd.uniforms["Mode"].loc, mode);
+
             this.prim.draw(rnd);
             rnd.gl.enable(rnd.gl.DEPTH_TEST);
             rnd.gl.bindTexture(rnd.gl.TEXTURE_2D, null);
@@ -899,14 +909,19 @@
     let rm, rmshd, rmmtl;
 
     let framesStill = -1;
+    let mode = 0;
 
     function init() {
+      console.log(hexToVec3(vec3ToHex(vec3(1, 0, 0))));
+
       rnd = new Render(document.getElementById("myCan"));
 
       rmshd = new Shader(rnd, "raytracing");
       rmmtl = new Material(rmshd, vec3(0, 0, 0), vec3(0, 0, 1), vec3(1, 1, 1), 10, 1);
 
       rm = new RaymarchingObject(rmmtl);
+
+      objectSelectorInit();
     }
 
     // Initialization
@@ -914,6 +929,8 @@
       init();
 
       const draw = () => {
+        inputUpdate();
+
         rnd.renderStart();
         /*
         prim.world = scale(vec3(0.8)).mul(rotate(t * 1, vec3(0, 1, 0)).mul(translate(vec3(-1, Math.sin(t * 2), -6))));
@@ -929,7 +946,7 @@
         framesStill = 1;
         */
 
-        rm.draw(framesStill, editObject);
+        rm.draw(framesStill, editObject, raysCount, mode);
 
         rnd.renderEnd();
         window.requestAnimationFrame(draw);
@@ -955,7 +972,7 @@
       mousePos.x = (e.clientX - rect.left) / width;
       mousePos.y = -(e.clientY - rect.top) / height + 1;
 
-      if (e.buttons == 1) {
+      if (e.buttons == 1 && mousePos.x >= 0 && mousePos.x <= 1 && mousePos.y >= 0 && mousePos.y <= 1) {
         let delta = {x: mousePos.x - lastMousePos.x, y: mousePos.y - lastMousePos.y};
 
         framesStill = 1;
@@ -964,12 +981,22 @@
           let pos = rm.objects[editObject].pos.sub(rnd.camera.loc);
           let d = pos.dot(rnd.camera.dir);
 
-          let mx = d / rnd.camera.projDist * delta.x * rnd.camera.projSize;
-          let my = d / rnd.camera.projDist * delta.y * rnd.camera.projSize;
+          if (keys['ctrl']) {
+            let mx = d / rnd.camera.projDist * delta.x * rnd.camera.projSize;
+            let my = d / rnd.camera.projDist * delta.y * rnd.camera.projSize;
+            let newR = Math.sqrt(mx * mx + my * my) * Math.sign(mx);
 
-          rm.objects[editObject].pos = rm.objects[editObject].pos.add(rnd.camera.right.mul(mx));
-          rm.objects[editObject].pos = rm.objects[editObject].pos.add(rnd.camera.up.mul(my));
-          rm.updateTexture();
+            rm.objects[editObject].r += newR;
+            rm.updateTexture();
+          }
+          else {
+            let mx = d / rnd.camera.projDist * delta.x * rnd.camera.projSize;
+            let my = d / rnd.camera.projDist * delta.y * rnd.camera.projSize;
+
+            rm.objects[editObject].pos = rm.objects[editObject].pos.add(rnd.camera.right.mul(mx));
+            rm.objects[editObject].pos = rm.objects[editObject].pos.add(rnd.camera.up.mul(my));
+            rm.updateTexture();
+          }
         } else {
           anglex += delta.y * sens;
           angley -= delta.x * sens;
@@ -979,6 +1006,7 @@
           // at = at.pointTransform(rotate(-delta.x * sens, vec3(0, 1, 0))).add(rnd.camera.loc);
 
           at = at.add(rnd.camera.loc);
+
           rnd.camera.update(rnd.camera.loc, at, vec3(0, 1, 0));
         }
       }
@@ -999,42 +1027,248 @@
 
     let editObject = -1;
 
-    document.addEventListener("keypress", (e) => {
-      if (e.key == 'w') {
+    let keys = {
+      "a": false,
+      "d": false,
+      "w": false,
+      "s": false,
+      "c": false,
+      "middle": false,
+      "ctrl": false,
+    };
+
+    let prevKeys = {...keys};
+
+    let keysClick = {...keys};
+
+    document.addEventListener("keydown", (e) => {
+      if (e.ctrlKey)
+        keys['ctrl'] = true;
+      else
+        keys[e.key] = true;
+    });
+
+    document.addEventListener("keyup", (e) => {
+      if (e.keyCode == 17)
+        keys['ctrl'] = false;
+      else
+        keys[e.key] = false;
+    });
+
+    function selectObject() {
+      $("#material-div").show();
+      $("#material-button").show();
+      document.getElementById("k-range").value = rm.objects[editObject].k * 100;
+      document.getElementById("color-picker").value = vec3ToHex(rm.objects[editObject].color);
+      $("#add-button").hide();
+      $("#object-selector").hide();
+      $("#object-div").show();
+      showAddMenu = false;
+    }
+
+    function diselectObject() {
+      $("#material-button").hide();
+      $("#material-selector").hide();
+      $("#material-div").hide();
+      showMaterialMenu = false;
+      $("#add-button").show();
+      $("#object-div").show();
+    }
+
+    function inputUpdate() {
+      let pressed = false;
+      let dir = vec3(0);
+
+      for (let i in keys) {
+        keysClick[i] = false;
+        if (!prevKeys[i] && keys[i])
+          keysClick[i] = true;
+      }
+
+      if (keys['w']) {
         framesStill = 1;
-        let delta = rnd.camera.dir.mul(speed * rnd.timer.globalDeltaTime);
+        pressed = true;
+        dir.z++;
+      }
+      if (keys['s']) {
+        framesStill = 1;
+        pressed = true;
+        dir.z--;
+      }
+      if (keys['a']) {
+        framesStill = 1;
+        pressed = true;
+        dir.x--;
+      }
+      if (keys['d']) {
+        framesStill = 1;
+        pressed = true;
+        dir.x++;
+      }
+
+      if (pressed) {
+        dir = dir.norm();
+
+        let delta = rnd.camera.right.mul(speed * dir.x).add(rnd.camera.dir.mul(speed * dir.z)).mul(rnd.timer.globalDeltaTime);
         rnd.camera.update(rnd.camera.loc.add(delta), rnd.camera.at.add(delta), vec3(0, 1, 0));
       }
-      if (e.key == 's') {
-        framesStill = 1;
-        let delta = rnd.camera.dir.mul(-speed * rnd.timer.globalDeltaTime);
-        rnd.camera.update(rnd.camera.loc.add(delta), rnd.camera.at.add(delta), vec3(0, 1, 0));
-      }
-      if (e.key == 'f') {
-        editObject = -1;
-      }
-      if (e.key == 'c') {
+
+      if (keysClick['c'])
         if (editObject != -1) {
+          let object;
+
           rm.objects[editObject].op = OP_SUB;
+
+          object = rm.objects[editObject];
+          rm.objects.splice(editObject, 1);
+          rm.objects.unshift(object);
           rm.updateTexture();
           editObject = -1;
           framesStill = 1;
         }
-      }
-    });
-
-    document.addEventListener("mousedown", (e) => {
-      if (e.button == 1) {
+      
+      if (keysClick['middle']) {
         let data = new Uint8Array(4);
 
-        readPixel(mousePos.x * rnd.width, mousePos.y * rnd.height, rnd.targets[rnd.curTarget].indexes, data);
+        readPixel(mousePos.x * rnd.width, mousePos.y * rnd.height, rnd.targets[(rnd.curTarget + 1) % 2].indexes, data);
         if (data[0] == 255 || data[0] == editObject)
           editObject = -1;
         else
           editObject = data[0];
-        e.preventDefault();
         framesStill = 1;
+
+        // Buttons updating
+        if (editObject == -1) {
+          diselectObject();
+        } else {
+          selectObject();
+        }
+      }
+
+      // Updating clicks
+      prevKeys = {...keys};
+    }
+
+    document.addEventListener("mousedown", (e) => {
+      if (e.button == 1) {
+        keys['middle'] = true;
+        e.preventDefault();
       }
     });
+
+    document.addEventListener("mouseup", (e) => {
+      if (e.button == 1) {
+        keys['middle'] = false;
+        e.preventDefault();
+      }
+    });
+
+    function hexToVec3(hex) {
+      let v = vec3(0);
+
+      v.x = Number("0x" + hex.slice(1, 3)) / 255.0;
+      v.y = Number("0x" + hex.slice(3, 5)) / 255.0;
+      v.z = Number("0x" + hex.slice(5, 7)) / 255.0;
+
+      return v;
+    }
+
+    function vec3ToHex(v) {
+        let hex = "#";
+
+        hex += Math.floor(v.x * 255).toString(16);
+        if (hex.length % 2 == 0)
+          hex += "0";
+        hex += Math.floor(v.y * 255).toString(16);
+        if (hex.length % 2 == 0)
+          hex += "0";
+        hex += Math.floor(v.z * 255).toString(16);
+        if (hex.length % 2 == 0)
+          hex += "0";
+
+        return hex;
+    }
+
+    let showAddMenu = false, showMaterialMenu = false, showSettingsMenu = false;
+
+    let raysCount = 4;
+
+    function objectSelectorInit() {
+      $("#object-selector").hide();
+
+      $("#add-button").on("click", () => {
+        showAddMenu = !showAddMenu;
+
+        if (showAddMenu)
+          $("#object-selector").slideDown();
+        else
+          $("#object-selector").slideUp();
+      });
+
+      $("#sphere-button").on("click", () => {
+        rm.objects.push({
+          pos: rnd.camera.dir.mul(5.0).add(rnd.camera.loc),
+          r: 1.0, 
+          color: vec3(0.9),
+          type: TYPE_BASIC, 
+          k: 1.0,
+          figure: FIGURE_SPHERE,
+          op: OP_PUT
+        });
+        framesStill = 1;
+
+        rm.updateTexture();
+      });
+
+      $("#material-button").hide();
+      $("#material-selector").hide();
+
+      $("#material-div").hide();
+
+      $("#material-button").on("click", () => {
+        showMaterialMenu = !showMaterialMenu;
+
+        if (showMaterialMenu) 
+          $("#material-selector").slideDown();
+        else
+          $("#material-selector").slideUp();
+      });
+
+      $("#k-range").on("input", () => {
+        rm.objects[editObject].k = document.getElementById("k-range").value / 100.0;
+        rm.updateTexture();
+        framesStill = 1;
+      });
+
+      $("#color-picker").on("input", () => {
+        rm.objects[editObject].color = hexToVec3(document.getElementById("color-picker").value);
+        rm.updateTexture();
+        framesStill = 1;
+      });
+
+      $("#settings-selector").hide();
+
+      $("#settings-button").on("click", () => {
+        showSettingsMenu = !showSettingsMenu;
+
+        if (showSettingsMenu)
+          $("#settings-selector").slideDown();
+        else
+          $("#settings-selector").slideUp();
+      });
+
+      $("#rays-range").on("change", () => {
+        raysCount = document.getElementById("rays-range").value;
+        framesStill = 1;
+      });
+
+      $("#mode-selector").on("click", () => {
+        mode = (mode + 1) % 2;
+        document.getElementById("mode-selector").value = mode ? "final" : "debug";
+        framesStill = 1;
+        editObject = -1;
+        diselectObject();
+      });
+    }
 
 })();

@@ -39,6 +39,9 @@ uniform float DeltaTime;
 uniform float Random;
 
 uniform int EditObject;
+uniform int MaxRayCount;
+
+uniform int Mode;
 
 #define Ka Ka4.xyz
 #define Kd KdTrans.xyz
@@ -74,20 +77,16 @@ vec3 RandomOnSphere(vec3 dir) {
 #define INF 100000.0
 #define ZERO 0.001
 
-#define LightM 0.000001
-#define G (6.67408 * 1e-11)
-#define LightV 0.1
-
 #define TYPE_BASIC 0
 #define TYPE_LIGHT 1
 #define TYPE_GLASS 2
 
-#define FigureSphere    0
-#define FigureBox       1
-#define FigurePlane     2
+#define FIGURE_SPHERE    0
+#define FIGURE_BOX       1
+#define FIGURE_PLANE     2
 
-#define OpPut 0
-#define OpSub 1
+#define OP_PUT 0
+#define OP_SUB 1
 
 struct OBJECT
 {
@@ -103,8 +102,76 @@ struct INTERSECTION
     float MinDist, RefDist;
 };
 
-#define NumOfObjects 6
-OBJECT Objects[NumOfObjects];
+int NumOfObjects = 0;
+
+#define FLOATS_IN_OBJECT 11
+
+// Reading objects info from float texture functions.
+void LoadNumOfObjects()
+{
+    NumOfObjects = int(texelFetch(Texture1, ivec2(0), 0).r);
+}
+
+vec3 GetPos(int i) 
+{
+    int j = i * FLOATS_IN_OBJECT + 1;
+
+    vec3 pos;
+
+    pos.x = texelFetch(Texture1, ivec2(j + 0, 0), 0).r;
+    pos.y = texelFetch(Texture1, ivec2(j + 1, 0), 0).r;
+    pos.z = texelFetch(Texture1, ivec2(j + 2, 0), 0).r;
+
+    return pos;
+}
+
+vec3 GetColor(int i) 
+{
+    int j = i * FLOATS_IN_OBJECT + 1;
+
+    vec3 color;
+
+    color.x = texelFetch(Texture1, ivec2(j + 3, 0), 0).r;
+    color.y = texelFetch(Texture1, ivec2(j + 4, 0), 0).r;
+    color.z = texelFetch(Texture1, ivec2(j + 5, 0), 0).r;
+
+    return color;
+}
+
+float GetR(int i)
+{
+    int j = i * FLOATS_IN_OBJECT + 1;
+    
+    return texelFetch(Texture1, ivec2(j + 6, 0), 0).r;
+}
+
+float GetK(int i)
+{
+    int j = i * FLOATS_IN_OBJECT + 1;
+    
+    return texelFetch(Texture1, ivec2(j + 7, 0), 0).r;
+}
+
+int GetType(int i)
+{
+    int j = i * FLOATS_IN_OBJECT + 1;
+
+    return int(texelFetch(Texture1, ivec2(j + 8, 0), 0).r);
+}
+
+int GetFigure(int i)
+{
+    int j = i * FLOATS_IN_OBJECT + 1;
+
+    return int(texelFetch(Texture1, ivec2(j + 9, 0), 0).r);
+}
+
+int GetOp(int i)
+{
+    int j = i * FLOATS_IN_OBJECT + 1;
+
+    return int(texelFetch(Texture1, ivec2(j + 10, 0), 0).r);
+}
 
 int RayCount = 0;
 
@@ -130,12 +197,16 @@ float PlnaeDistance(vec3 n, float d, vec3 pos)
 // Figures manager
 float DistanceHandler(int ObjectInd, vec3 pos)
 {
-    if (Objects[ObjectInd].Figure == FigureSphere)
-        return SphereDistance(Objects[ObjectInd].Pos, Objects[ObjectInd].R, pos);
-    else if (Objects[ObjectInd].Figure == FigureBox)
-        return BoxDistance(Objects[ObjectInd].Pos, Objects[ObjectInd].R, pos);
-    else if (Objects[ObjectInd].Figure == FigurePlane)
-        return PlnaeDistance(Objects[ObjectInd].Pos, Objects[ObjectInd].R, pos);
+    int fig = GetFigure(ObjectInd);
+    float r = GetR(ObjectInd);
+    vec3 c = GetPos(ObjectInd);
+
+    if (fig == FIGURE_SPHERE)
+        return SphereDistance(c, r, pos);
+    else if (fig == FIGURE_BOX)
+        return BoxDistance(c, r, pos);
+    else if (fig == FIGURE_PLANE)
+        return PlnaeDistance(c, r, pos);
 }
 
 INTERSECTION GetDistance(vec3 pos)
@@ -148,8 +219,9 @@ INTERSECTION GetDistance(vec3 pos)
     for (int i = 0; i < NumOfObjects; i++) 
     {
         float dist = DistanceHandler(i, pos);
+        int op = GetOp(i);
 
-        if (Objects[i].Op == OpSub)
+        if (op == OP_SUB && !bool(Mode))
         {
             dist = -dist;
             if (dist > MaxSubDist)
@@ -249,19 +321,20 @@ vec3 RayTrace(vec3 pos, vec3 dir, float maxLen)
                 return vec3(0.1, 0.5, 0.9);
             }
 
-            vec3 col = Objects[intersection.ObjInd].Color;
+            vec3 col = GetColor(intersection.ObjInd);
             color *= col;
 
-            int type = Objects[intersection.ObjInd].Type;
+            int type = GetType(intersection.ObjInd);
+            float k = GetK(intersection.ObjInd);
 
             if (type == TYPE_BASIC) {
                 vec3 rand = RandomOnSphere(dir * vec3(float(RayCount) + Random + mod(Time, 1000.0) / 1000.0) + gl_FragCoord.xyz);
-                rand = reflect(dir, n) * (1.0 - Objects[intersection.ObjInd].K) + rand * Objects[intersection.ObjInd].K;
+                rand = reflect(dir, n) * (1.0 - k) + rand * k;
 
                 dir = normalize(rand * dot(n, rand));
             }
             else if (type == TYPE_GLASS)
-                dir = refract(dir, n, 1.0 / (1.0 - Objects[intersection.ObjInd].K));
+                dir = refract(dir, n, 1.0 / (1.0 - k));
             else if (type == TYPE_LIGHT)
                 return color;
         }
@@ -286,28 +359,6 @@ vec3 ToneMap(vec3 col)
     return col;
 }
 
-#define FLOATS_IN_OBJECT 11
-
-void LoadScene()
-{
-    for (int i = 0; i < NumOfObjects; i++)
-    {
-        int j = i * FLOATS_IN_OBJECT;
-
-        Objects[i].Pos.x = texelFetch(Texture1, ivec2(j + 0, 0), 0).r;
-        Objects[i].Pos.y = texelFetch(Texture1, ivec2(j + 1, 0), 0).r;
-        Objects[i].Pos.z = texelFetch(Texture1, ivec2(j + 2, 0), 0).r;
-        Objects[i].Color.x = texelFetch(Texture1, ivec2(j + 3, 0), 0).r;
-        Objects[i].Color.y = texelFetch(Texture1, ivec2(j + 4, 0), 0).r;
-        Objects[i].Color.z = texelFetch(Texture1, ivec2(j + 5, 0), 0).r;
-        Objects[i].R = texelFetch(Texture1, ivec2(j + 6, 0), 0).r;
-        Objects[i].K = texelFetch(Texture1, ivec2(j + 7, 0), 0).r;
-        Objects[i].Type = int(texelFetch(Texture1, ivec2(j + 8, 0), 0).r);
-        Objects[i].Figure = int(texelFetch(Texture1, ivec2(j + 9, 0), 0).r);
-        Objects[i].Op = int(texelFetch(Texture1, ivec2(j + 10, 0), 0).r);
-    }
-}
-
 void main( void )
 {
     float aspectRatio = Size.x / Size.y;
@@ -321,16 +372,16 @@ void main( void )
     // Objects[0].Color = vec3(0.9, 0.9, 0.9);
     // Objects[0].Type = TYPE_BASIC;
     // Objects[0].K = 1.0;
-    // Objects[0].Figure = FigureSphere;
-    // Objects[0].Op = OpSub;
+    // Objects[0].Figure = FIGURE_SPHERE;
+    // Objects[0].Op = OP_SUB;
 
     // Objects[1].Pos = vec3(-0.8, -0.8, -10.0);
     // Objects[1].R = 2.0;
     // Objects[1].Color = vec3(0.9, 0.9, 0.9);
     // Objects[1].Type = TYPE_BASIC;
     // Objects[1].K = 1.0;
-    // Objects[1].Figure = FigureSphere;
-    // Objects[1].Op = OpPut;
+    // Objects[1].Figure = FIGURE_SPHERE;
+    // Objects[1].Op = OP_PUT;
 
     // // R = 0.5 pos = 0.5, 0.0, -6.0
     // Objects[2].Pos = normalize(vec3(1));
@@ -338,37 +389,36 @@ void main( void )
     // Objects[2].Color = vec3(1, 1, 1);
     // Objects[2].Type = TYPE_LIGHT;
     // Objects[2].K = 0.7;
-    // Objects[2].Figure = FigurePlane;
-    // Objects[2].Op = OpPut;
+    // Objects[2].Figure = FIGURE_PLANE;
+    // Objects[2].Op = OP_PUT;
 
     // Objects[3].Pos = vec3(2.5, 1.3, -10.0);
     // Objects[3].R = 1.5;
     // Objects[3].Color = vec3(1, 0.5, 1);
     // Objects[3].Type = TYPE_BASIC;
     // Objects[3].K = 0.03;
-    // Objects[3].Figure = FigureSphere;
-    // Objects[3].Op = OpPut;
+    // Objects[3].Figure = FIGURE_SPHERE;
+    // Objects[3].Op = OP_PUT;
 
     // Objects[4].Pos = vec3(2.5, -2.0, -10.0);
     // Objects[4].R = 1.3;
     // Objects[4].Color = vec3(0.7, 0.2, 0.9);
     // Objects[4].Type = TYPE_BASIC;
     // Objects[4].K = 0.1;
-    // Objects[4].Figure = FigureSphere;
-    // Objects[4].Op = OpPut;
+    // Objects[4].Figure = FIGURE_SPHERE;
+    // Objects[4].Op = OP_PUT;
 
     // Objects[5].Pos = vec3(0, -12, -5);
     // Objects[5].R = 10.0;
     // Objects[5].Color = vec3(0.9, 0.9, 0.9);
     // Objects[5].Type = TYPE_BASIC;
     // Objects[5].K = 1.0;
-    // Objects[5].Figure = FigureBox;
-    // Objects[5].Op = OpPut;
+    // Objects[5].Figure = FIGURE_BOX;
+    // Objects[5].Op = OP_PUT;
 
-    LoadScene();
+    LoadNumOfObjects();
 
     vec3 color = vec3(0);
-    int MaxRayCount = 4;
 
     for (RayCount = 0; RayCount < MaxRayCount; RayCount++)
         color += RayTrace(pos, dir, far);
@@ -377,4 +427,6 @@ void main( void )
     color = ToneMap(color);
     color = mix(color, prevColor, 1.0 - uSamplePart);
     OutColor = vec4(color, 1);
+
+    // OutColor = vec4(vec3(float(MaxRayCount) / 100.0), 1);
 }

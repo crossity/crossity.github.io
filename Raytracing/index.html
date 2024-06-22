@@ -1,26 +1,51 @@
 <!DOCTYPE html>
 <html lang="ru" class="notranslate" translate="no">
-    <head>
-        <meta name="google" content="notranslate">
-        <meta charset="utf-8"/>
-        <meta http-equiv='cache-control' content='no-cache'>
-        <meta http-equiv='expires' content='0'>
-        <meta http-equiv='pragma' content='no-cache'>
-        <link rel="shortcut icon" href="Accident.png" type="image/png"/>
-        <script src="./main.js" type="module"></script>
-    </head>
-    <body>
-	<h3><a href="../">Back</a></h3>
-        <div style="position: absolute; left: calc(50% - 200px); top: 20px;">
-            <canvas id="myCan" width="400px" height="400px"></canvas>
+
+<head>
+    <meta name="google" content="notranslate">
+    <meta charset="utf-8" />
+    <meta http-equiv='cache-control' content='no-cache'>
+    <meta http-equiv='expires' content='0'>
+    <meta http-equiv='pragma' content='no-cache'>
+    <link rel="shortcut icon" href="Accident.png" type="image/png" />
+    <link rel="stylesheet" href="./style.css" type="text/css">
+    <script type="text/javascript" src="http://code.jquery.com/jquery-latest.min.js"></script>
+    <script src="./src/main.js" type="module"></script>
+</head>
+
+<body>
+    <div id="canWrapper">
+        <div id="object-div" class="menu">
+            <input type="button" value="add" id="add-button" class="menu-button"></input>
+            <div id="object-selector">
+                <input type="button" value="sphere" id="sphere-button" class="menu-element"></input>
+                <input type="button" value="box" id="box-button" class="menu-element"></input>
+            </div>
         </div>
-        <pre style="position: absolute; top: calc(400px + 20px)">
+        <div id="material-div" class="menu">
+            <input type="button" value="material" id="material-button" class="menu-button"></input>
+            <div id="material-selector">
+                <input type="range" min="0" max="100" value="50" id="k-range" class="menu-element"></input>
+                <input type="color" , id="color-picker" value="#ff0000" class="menu-element"></input>
+            </div>
+        </div>
+        <div id="settings-div" class="menu">
+            <input type="button" value="settings" id="settings-button" class="menu-button"></input>
+            <div id="settings-selector">
+                <input type="range" min="1" max="64" value="4" id="rays-range" class="menu-element"></input>
+            </div>
+        </div>
+        <input type="button" id="mode-selector" class="menu-button" value="debug"></input>
+        <canvas id="myCan" width="250px" height="250px"></canvas>
+    </div>
+    <pre style="position: absolute; top: calc(250px + 20px)">
             Controlls:</br>
             middle mouse button - select/unselect an object</br>
-            left mouse button   - move object or rotate camera</br>
-            w                   - move forward</br>
-            s                   - move backword</br>
+            lbutton             - move selected object or rotate camera</br>
+            ctrl + lbutton      - scale object</br>
+            w, a, s, d          - move</br>
             c                   - make object operation subtraction</br>
         </pre>
-    </body>
+</body>
+
 </html>
