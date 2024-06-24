@@ -18,6 +18,8 @@
     border-radius: 5px;
     margin-top: 0px;
     margin-bottom: 0px;
+    position:relative;
+    left: 5px;
 }
 
 .menu-button {
@@ -51,6 +53,16 @@ html {
 }
 
 #material-div {
+    position: relative;
+    left: 5px;
+}
+
+#interaction-div {
+    position: relative;
+    left: 5px;
+}
+
+#edit-div {
     justify-self: start;
     grid-row: 1 / 2;
     grid-column: 1 / 2;
@@ -66,4 +78,30 @@ html {
     justify-self: end;
     grid-row: 2 / 3;
     grid-column: 3 / 4;
+}
+
+input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+    -webkit-appearance: none; /* Override default look */
+    appearance: none;
+    background-color: #474747;
+    border-radius: 10px;
+    height: 10px;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; /* Override default look */
+   appearance: none;
+   background: transparent;
+   margin-top: 0px; /* Centers thumb on the track */
+   background-color: #fffef5;
+   border-radius: 10px;
+   height: 10px;
+   width: 1rem;    
 }

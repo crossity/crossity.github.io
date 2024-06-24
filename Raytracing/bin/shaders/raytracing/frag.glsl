@@ -295,6 +295,29 @@ vec3 RayTrace(vec3 pos, vec3 dir, float maxLen)
 {
     vec3 color = vec3(1), n = vec3(0);
     float PrevDist = 0.0;
+
+    if (bool(Mode)) 
+    {
+        INTERSECTION intersection = RayCast(pos, dir, maxLen);
+        vec3 LightDir = normalize(vec3(1));
+        pos = intersection.Pos;
+
+        if (intersection.MinDist <= ZERO) {
+            OutIndex = vec4(intersection.ObjInd) / 255.0;
+            float d = max(dot(intersection.N, LightDir), 0.1);
+            color = GetColor(intersection.ObjInd);
+
+            if (intersection.ObjInd == EditObject && (mod(pos.x, 0.2) - OUTLINE_SIZE < 0.0 || mod(pos.y, 0.2) - OUTLINE_SIZE < 0.0 || mod(pos.z, 0.2) - OUTLINE_SIZE < 0.0))
+            {
+                return vec3(0.1, 0.5, 0.9);
+            }
+            if (GetOp(intersection.ObjInd) == OP_SUB)
+                return vec3(1, 0, 0);
+            return color * d;
+        }
+        OutIndex = vec4(1);
+        return vec3(0, 0, 0);
+    }
     
     for (int i = 0; i < 100; i++) 
     {
@@ -419,10 +442,11 @@ void main( void )
     LoadNumOfObjects();
 
     vec3 color = vec3(0);
+    int RaysCount = bool(Mode) ? 1 : MaxRayCount;
 
-    for (RayCount = 0; RayCount < MaxRayCount; RayCount++)
+    for (RayCount = 0; RayCount < RaysCount; RayCount++)
         color += RayTrace(pos, dir, far);
-    color = color / float(MaxRayCount);
+    color = color / float(RaysCount);
     vec3 prevColor = texelFetch(Texture0, ivec2(gl_FragCoord.xy), 0).xyz;
     color = ToneMap(color);
     color = mix(color, prevColor, 1.0 - uSamplePart);

@@ -16,17 +16,28 @@
 <body>
     <div id="canWrapper">
         <div id="object-div" class="menu">
-            <input type="button" value="add" id="add-button" class="menu-button"></input>
+            <input type="button" value="add" id="object-button" class="menu-button"></input>
             <div id="object-selector">
                 <input type="button" value="sphere" id="sphere-button" class="menu-element"></input>
                 <input type="button" value="box" id="box-button" class="menu-element"></input>
             </div>
         </div>
-        <div id="material-div" class="menu">
-            <input type="button" value="material" id="material-button" class="menu-button"></input>
-            <div id="material-selector">
-                <input type="range" min="0" max="100" value="50" id="k-range" class="menu-element"></input>
-                <input type="color" , id="color-picker" value="#ff0000" class="menu-element"></input>
+        <div id="edit-div">
+            <input type="button" value="edit" id="edit-button" class="menu-button">
+            <div id="edit-selector">
+                <div id="material-div" class="menu">
+                    <input type="button" value="material" id="material-button" class="menu-button"></input>
+                    <div id="material-selector">
+                        <input type="range" min="0" max="100" value="50" id="k-range" class="menu-element"></input>
+                        <input type="color" id="color-picker" value="#ff0000" class="menu-element"></input>
+                    </div>
+                </div>
+                <div id="interaction-div" class="menu">
+                    <input type="button" value="interaction" id="interaction-button" class="menu-button"></input>
+                    <div id="interaction-selector">
+                        <input type="button" value="operator: put" id="operator-button" class="menu-element"></input>
+                    </div>
+                </div>
             </div>
         </div>
         <div id="settings-div" class="menu">
@@ -35,7 +46,7 @@
                 <input type="range" min="1" max="64" value="4" id="rays-range" class="menu-element"></input>
             </div>
         </div>
-        <input type="button" id="mode-selector" class="menu-button" value="debug"></input>
+        <input type="button" id="mode-selector" class="menu-button" value="final"></input>
         <canvas id="myCan" width="250px" height="250px"></canvas>
     </div>
     <pre style="position: absolute; top: calc(250px + 20px)">
