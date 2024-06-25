@@ -32,6 +32,7 @@ uniform Material
 
 uniform sampler2D Texture0;
 uniform sampler2D Texture1;
+uniform sampler2D Texture2;
 uniform float uSamplePart;
 
 uniform float Time;
@@ -84,22 +85,17 @@ vec3 RandomOnSphere(vec3 dir) {
 #define FIGURE_SPHERE    0
 #define FIGURE_BOX       1
 #define FIGURE_PLANE     2
+#define FIGURE_MANDEL    3
 
 #define OP_PUT 0
 #define OP_SUB 1
-
-struct OBJECT
-{
-    vec3 Pos, Color;
-    float R, K;
-    int Type, Figure, Op;
-};
+#define OP_UNI 2
 
 struct INTERSECTION
 {
-    vec3 Pos, NewDir, N;
+    vec3 Pos, NewDir, N, Color;
     int ObjInd;
-    float MinDist, RefDist;
+    float MinDist, RefDist, K;
 };
 
 int NumOfObjects = 0;
@@ -181,6 +177,34 @@ float SphereDistance(vec3 c, float r, vec3 pos)
     return distance(c, pos) - r;
 }
 
+float MandelDistance(vec3 c, float r, vec3 pos)
+{
+    vec3 z0 = (pos - c) / r;
+    vec3 z = z0;
+	float dr = 1.0;
+	r = 0.0;
+    float Power = 8.0;
+	for (int i = 0; i < 10 ; i++) {
+		r = length(z);
+		if (r > 2.0) break;
+		
+		// convert to polar coordinates
+		float theta = acos(z.z/r);
+		float phi = atan(z.y,z.x);
+		dr =  pow( r, Power-1.0)*Power*dr + 1.0;
+		
+		// scale and rotate the point
+		float zr = pow( r,Power);
+		theta = theta*Power;
+		phi = phi*Power;
+		
+		// convert back to cartesian coordinates
+		z = zr*vec3(sin(theta)*cos(phi), sin(phi)*sin(theta), cos(theta));
+		z+= z0;
+	}
+	return 0.5*log(r)*r/dr;
+}
+
 float BoxDistance(vec3 c, float r, vec3 pos)
 {
     vec3 d = abs(pos - c) - r;
@@ -192,7 +216,6 @@ float PlnaeDistance(vec3 n, float d, vec3 pos)
 {
     return abs(dot(pos, n) - d);
 }
-
 
 // Figures manager
 float DistanceHandler(int ObjectInd, vec3 pos)
@@ -207,6 +230,22 @@ float DistanceHandler(int ObjectInd, vec3 pos)
         return BoxDistance(c, r, pos);
     else if (fig == FIGURE_PLANE)
         return PlnaeDistance(c, r, pos);
+    else if (fig == FIGURE_MANDEL)
+        return MandelDistance(c, r, pos);
+}
+
+INTERSECTION SmoothUnion(INTERSECTION d1, INTERSECTION d2, float k)
+{
+    INTERSECTION i;
+    float h = clamp(0.5 + 0.5 * (d2.MinDist - d1.MinDist) / k, 0.0, 1.0);
+
+    i.MinDist = mix( d2.MinDist, d1.MinDist, h ) - k * h * (1.0 - h);
+    i.Color = mix(d2.Color, d1.Color, h);
+    i.K = mix(d2.K, d1.K, h);
+    
+    i.ObjInd = h < 0.5 ? d2.ObjInd : d1.ObjInd;
+    // i.Color = vec3(h);
+    return i; 
 }
 
 INTERSECTION GetDistance(vec3 pos)
@@ -214,7 +253,12 @@ INTERSECTION GetDistance(vec3 pos)
     INTERSECTION intersection;
 
     float MaxSubDist = -INF;
+    INTERSECTION Uni;
+
+    Uni.MinDist = INF;
     intersection.MinDist = INF;
+
+    intersection.ObjInd = -1;
 
     for (int i = 0; i < NumOfObjects; i++) 
     {
@@ -227,15 +271,44 @@ INTERSECTION GetDistance(vec3 pos)
             if (dist > MaxSubDist)
                 MaxSubDist = dist;
         }
+        else if (op == OP_UNI && !bool(Mode))
+        {
+            if (Uni.MinDist == INF)
+            {
+                Uni.MinDist = dist;
+                Uni.Color = GetColor(i);
+                Uni.K = GetK(i);
+                Uni.ObjInd = i;
+            }
+            else
+            {
+                INTERSECTION inter;
+
+                inter.MinDist = dist;
+                inter.Color = GetColor(i);
+                inter.K = GetK(i);
+                inter.ObjInd = i;
+                Uni = SmoothUnion(Uni, inter, 0.5);
+            }
+            if (Uni.MinDist < intersection.MinDist)
+            {
+                intersection.MinDist = Uni.MinDist;
+                intersection.Color = Uni.Color;
+                intersection.ObjInd = Uni.ObjInd;
+                intersection.K = Uni.K;
+            }
+        }
         else
             if (dist < intersection.MinDist)
             {
                 intersection.MinDist = dist;
-                intersection.Pos = pos;
                 intersection.ObjInd = i;
+                intersection.Color = GetColor(i);
+                intersection.K = GetK(i);
             }
     }
 
+    intersection.Pos = pos;
     if (intersection.MinDist < MaxSubDist)
         intersection.MinDist = MaxSubDist;
     return intersection;
@@ -305,12 +378,10 @@ vec3 RayTrace(vec3 pos, vec3 dir, float maxLen)
         if (intersection.MinDist <= ZERO) {
             OutIndex = vec4(intersection.ObjInd) / 255.0;
             float d = max(dot(intersection.N, LightDir), 0.1);
-            color = GetColor(intersection.ObjInd);
+            color = intersection.Color;
 
             if (intersection.ObjInd == EditObject && (mod(pos.x, 0.2) - OUTLINE_SIZE < 0.0 || mod(pos.y, 0.2) - OUTLINE_SIZE < 0.0 || mod(pos.z, 0.2) - OUTLINE_SIZE < 0.0))
-            {
                 return vec3(0.1, 0.5, 0.9);
-            }
             if (GetOp(intersection.ObjInd) == OP_SUB)
                 return vec3(1, 0, 0);
             return color * d;
@@ -344,11 +415,11 @@ vec3 RayTrace(vec3 pos, vec3 dir, float maxLen)
                 return vec3(0.1, 0.5, 0.9);
             }
 
-            vec3 col = GetColor(intersection.ObjInd);
+            vec3 col = intersection.Color;
             color *= col;
 
             int type = GetType(intersection.ObjInd);
-            float k = GetK(intersection.ObjInd);
+            float k = intersection.K;
 
             if (type == TYPE_BASIC) {
                 vec3 rand = RandomOnSphere(dir * vec3(float(RayCount) + Random + mod(Time, 1000.0) / 1000.0) + gl_FragCoord.xyz);
@@ -365,7 +436,7 @@ vec3 RayTrace(vec3 pos, vec3 dir, float maxLen)
         {
             color *= vec3(0.6, 0.6, 1);
             OutIndex = vec4(1);
-            return 0.0 * color;
+            return 1.0 * color;
         }
     }
     OutIndex = vec4(1);
@@ -439,6 +510,16 @@ void main( void )
     // Objects[5].Figure = FIGURE_BOX;
     // Objects[5].Op = OP_PUT;
 
+    vec3 prevColor = texelFetch(Texture0, ivec2(gl_FragCoord.xy), 0).xyz;
+
+    if (uSamplePart < 2.0 / 255.0 && !bool(Mode))
+    {
+        // OutColor = vec4(texelFetch(Texture2, ivec2(gl_FragCoord.xy), 0).xyz, 1);
+        OutColor = vec4(prevColor, 1);
+        OutIndex = texelFetch(Texture2, ivec2(gl_FragCoord.xy), 0).xyzw;
+        return;
+    }
+
     LoadNumOfObjects();
 
     vec3 color = vec3(0);
@@ -447,7 +528,6 @@ void main( void )
     for (RayCount = 0; RayCount < RaysCount; RayCount++)
         color += RayTrace(pos, dir, far);
     color = color / float(RaysCount);
-    vec3 prevColor = texelFetch(Texture0, ivec2(gl_FragCoord.xy), 0).xyz;
     color = ToneMap(color);
     color = mix(color, prevColor, 1.0 - uSamplePart);
     OutColor = vec4(color, 1);

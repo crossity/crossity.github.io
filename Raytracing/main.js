@@ -551,6 +551,8 @@
                 this.rnd.gl.uniform1i(this.uniforms["Texture0"].loc, 0);
             if (this.uniforms["Texture1"] != undefined)
                 this.rnd.gl.uniform1i(this.uniforms["Texture1"].loc, 1);
+            if (this.uniforms["Texture2"] != undefined)
+                this.rnd.gl.uniform1i(this.uniforms["Texture2"].loc, 2);
             this.rnd.gl.useProgram(null);
 
             // Attributes
@@ -763,9 +765,11 @@
     const FIGURE_SPHERE = 0;
     const FIGURE_BOX    = 1;
     const FIGURE_PLANE  = 2;
+    const FIGURE_MANDEL = 3;
 
     const OP_PUT = 0;
     const OP_SUB = 1;
+    const OP_UNI = 2;
 
     const FLOATS_IN_OBJECT = 11;
 
@@ -775,15 +779,6 @@
             this.prim = new Prim(mtl, [vertex(vec3(-1, -1, 0.5)), vertex(vec3(3, -1, 0.5)), vertex(vec3(-1, 3, 0.5))], [0, 1, 2]);
 
             this.objects = [
-                {
-                    pos: vec3(0.5 - 0.8, 3.0 - 2.0, -10.0),
-                    r: 1.0,
-                    color: vec3(0.9),
-                    type: TYPE_BASIC,
-                    k: 1.0,
-                    figure: FIGURE_SPHERE,
-                    op: OP_SUB
-                },
                 {
                     pos: vec3(-0.8, -0.8, -10.0),
                     r: 2.0, 
@@ -828,7 +823,16 @@
                     k: 1.0,
                     figure: FIGURE_BOX,
                     op: OP_PUT
-                }
+                },
+                {
+                    pos: vec3(0.5 - 0.8, 3.0 - 2.0, -10.0),
+                    r: 1.0,
+                    color: vec3(0.9),
+                    type: TYPE_BASIC,
+                    k: 1.0,
+                    figure: FIGURE_SPHERE,
+                    op: OP_SUB
+                },
             ];
 
             this.updateTexture();
@@ -864,7 +868,7 @@
                 gl.TEXTURE_2D,
                 0,
                 gl.R32F,
-                FLOATS_IN_OBJECT * this.objects.length,
+                FLOATS_IN_OBJECT * this.objects.length + 1,
                 1,
                 0,
                 gl.RED,
@@ -886,6 +890,9 @@
 
             rnd.gl.activeTexture(rnd.gl.TEXTURE1);
             rnd.gl.bindTexture(rnd.gl.TEXTURE_2D, this.tex);
+
+            rnd.gl.activeTexture(rnd.gl.TEXTURE2);
+            rnd.gl.bindTexture(rnd.gl.TEXTURE_2D, rnd.targets[(rnd.curTarget + 1) % 2].indexes);
 
             let applied = this.mtl.shd.apply();
             if (applied && this.mtl.shd.uniforms["uSamplePart"] != undefined)
@@ -1246,6 +1253,21 @@
         rm.updateTexture();
       });
 
+      $("#mandel-button").on("click", () => {
+        rm.objects.push({
+          pos: rnd.camera.dir.mul(5.0).add(rnd.camera.loc),
+          r: 1.0, 
+          color: vec3(0.9),
+          type: TYPE_BASIC, 
+          k: 1.0,
+          figure: FIGURE_MANDEL,
+          op: OP_PUT
+        });
+        framesStill = 1;
+
+        rm.updateTexture();
+      });
+
       /* $("#material-button").hide(); */
       $("#material-selector").hide();
 
@@ -1300,24 +1322,22 @@
       });
 
       $("#operator-button").on("click", () => {
-        rm.objects[editObject].op = (rm.objects[editObject].op + 1) % 2;
+        rm.objects[editObject].op = (rm.objects[editObject].op + 1) % 3;
 
-        if (rm.objects[editObject].op == OP_SUB) {
-          let object = rm.objects[editObject];
-
-          rm.objects.splice(editObject, 1);
-          rm.objects.unshift(object);
-          editObject = 0;
-        } else {
-          let object = rm.objects[editObject];
-
-          rm.objects.splice(editObject, 1);
-          rm.objects.push(object);
-          editObject = rm.objects.length - 1;
-        }
         rm.updateTexture();
         framesStill = 1;
-        document.getElementById("operator-button").value = "operator: " + (rm.objects[editObject].op == OP_SUB ? "sub" : "put");
+
+        let str;
+
+        if (rm.objects[editObject].op == OP_SUB)
+          str = "sub";
+        else if (rm.objects[editObject].op == OP_UNI)
+          str = "union";
+        else 
+          str = "put";
+
+        console.log(rm.objects[editObject].op);
+        document.getElementById("operator-button").value = "operator: " + str;
       });
 
       $("#settings-selector").hide();
