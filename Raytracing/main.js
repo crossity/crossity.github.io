@@ -810,8 +810,8 @@
                     pos: vec3(2.5, -2.0, -10.0),
                     r: 1.3, 
                     color: vec3(0.7, 0.2, 0.9),
-                    type: TYPE_BASIC,
-                    k: 0.1, 
+                    type: TYPE_LIGHT,
+                    k: 3.0, 
                     figure: FIGURE_SPHERE,
                     op: OP_PUT
                 },
@@ -1045,6 +1045,7 @@
       "c": false,
       "middle": false,
       "ctrl": false,
+      "backspace": false,
     };
 
     let prevKeys = {...keys};
@@ -1054,6 +1055,8 @@
     document.addEventListener("keydown", (e) => {
       if (e.ctrlKey)
         keys['ctrl'] = true;
+      else if (e.key == "Backspace")
+        keys['backspace'] = true;
       else
         keys[e.key] = true;
     });
@@ -1061,6 +1064,8 @@
     document.addEventListener("keyup", (e) => {
       if (e.keyCode == 17)
         keys['ctrl'] = false;
+      else if (e.key == "Backspace")
+        keys['backspace'] = false;
       else
         keys[e.key] = false;
     });
@@ -1155,6 +1160,15 @@
           diselectObject();
         } else {
           selectObject();
+        }
+      }
+
+      if (keysClick['backspace']) {
+        if (editObject != -1) {
+          rm.objects.splice(editObject, 1);
+          rm.updateTexture();
+          editObject = -1;
+          framesStill = 1;
         }
       }
 
@@ -1338,6 +1352,19 @@
 
         console.log(rm.objects[editObject].op);
         document.getElementById("operator-button").value = "operator: " + str;
+      });
+
+      $("#type-button").on("click", () => {
+        rm.objects[editObject].type = (rm.objects[editObject].type + 1) % 2;
+        let str;
+
+        if (rm.objects[editObject].type == TYPE_BASIC)
+          str = "basic";
+        else
+          str = "light";
+        document.getElementById("type-button").value = "type: " + str;
+        rm.updateTexture();
+        framesStill = 1;
       });
 
       $("#settings-selector").hide();

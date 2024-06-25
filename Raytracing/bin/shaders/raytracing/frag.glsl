@@ -430,13 +430,13 @@ vec3 RayTrace(vec3 pos, vec3 dir, float maxLen)
             else if (type == TYPE_GLASS)
                 dir = refract(dir, n, 1.0 / (1.0 - k));
             else if (type == TYPE_LIGHT)
-                return color;
+                return color * k * 10.0;
         }
         else
         {
             color *= vec3(0.6, 0.6, 1);
             OutIndex = vec4(1);
-            return 1.0 * color;
+            return 0.0 * color;
         }
     }
     OutIndex = vec4(1);
