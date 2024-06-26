@@ -390,7 +390,7 @@ vec3 RayTrace(vec3 pos, vec3 dir, float maxLen)
         return vec3(0, 0, 0);
     }
     
-    for (int i = 0; i < 100; i++) 
+    for (int i = 0; i < 10; i++) 
     {
         INTERSECTION intersection = RayCast(pos + n * ZERO * 2.0, dir, maxLen);
 
@@ -435,12 +435,12 @@ vec3 RayTrace(vec3 pos, vec3 dir, float maxLen)
         else
         {
             color *= vec3(0.6, 0.6, 1);
-            OutIndex = vec4(1);
+            if (i > 1)
+                OutIndex = vec4(1.0);
             return 0.0 * color;
         }
     }
-    OutIndex = vec4(1);
-    return vec3(0);
+    return vec3(1);
 }
 
 vec3 ToneMap(vec3 col)
