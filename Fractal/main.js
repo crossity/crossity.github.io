@@ -60,7 +60,7 @@
       Zn = vec2(Zn.x * Zn.x - Zn.y * Zn.y, Zn.x * Zn.y + Zn.x * Zn.y);
       Zn = Zn + C;
     }
-    float c = (float(n) / float(max_n)) * 4.0; 
+    float c = (float(n) / float(max_n)) * 2.0; 
     OutColor = vec4(c, c * 0.5, c * 0.8, 1.0);
   }
   `;
@@ -151,23 +151,17 @@
   } // End of 'onClick' function
 
   function zoom(dir) {
-    let size = {x: end.x - start.x, y: end.y - start.y};
 
-    let mp = {x: mousePos.x * 2 - 1, y: mousePos.y * 2 - 1};
+    let mp = {x: mousePos.x * (end.x - start.x) + start.x, y: mousePos.y * (end.y - start.y) + start.y};
+    let d1x = -dir * 0.1 * (mp.x - start.x);
+    let d1y = -dir * 0.1 * (mp.y - start.y);
+    let d2x = -dir * 0.1 * (end.x - mp.x);
+    let d2y = -dir * 0.1 * (end.y - mp.y);
 
-    let s = {x: mp.x * size.x + start.x, y: mp.y * size.y + start.y};
-    let e = {x: mp.x * size.x + end.x, y: mp.y * size.y + end.y};
-
-    let delta = -0.03 * dir * size.x;
-
-    s.x += delta, s.y += delta;
-    e.x -= delta, e.y -= delta;
-
-    start.x = s.x - mp.x * (size.x - delta * 2);
-    start.y = s.y - mp.y * (size.x - delta * 2);
-
-    end.x = e.x - mp.x * (size.x - delta * 2);
-    end.y = e.y - mp.y * (size.y - delta * 2);
+    start.x += d1x;
+    start.y += d1y;
+    end.x -= d2x;
+    end.y -= d2y;
   } 
 
   window.addEventListener("load", () => {
