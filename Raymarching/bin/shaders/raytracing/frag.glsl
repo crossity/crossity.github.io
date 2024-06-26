@@ -435,12 +435,13 @@ vec3 RayTrace(vec3 pos, vec3 dir, float maxLen)
         else
         {
             color *= vec3(0.6, 0.6, 1);
-            if (i > 1)
-                OutIndex = vec4(1.0);
+            if (i != 0)
+                OutIndex = vec4(1);
             return 0.0 * color;
         }
     }
-    return vec3(1);
+    OutIndex = vec4(1);
+    return vec3(0);
 }
 
 vec3 ToneMap(vec3 col)
@@ -450,6 +451,7 @@ vec3 ToneMap(vec3 col)
 
 	col *= white * exposure;
 	col = (col * (1.0 + col / white / white)) / (1.0 + col);
+    col = pow(col, vec3(0.4545));
     return col;
 }
 
