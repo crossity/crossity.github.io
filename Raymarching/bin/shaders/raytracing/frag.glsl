@@ -41,6 +41,7 @@ uniform float Random;
 
 uniform int EditObject;
 uniform int MaxRayCount;
+uniform int NumOfReflections;
 
 uniform int Mode;
 
@@ -95,7 +96,7 @@ struct INTERSECTION
 {
     vec3 Pos, NewDir, N, Color;
     int ObjInd;
-    float MinDist, RefDist, K;
+    float MinDist, K;
 };
 
 int NumOfObjects = 0;
@@ -335,11 +336,9 @@ INTERSECTION RayCast(vec3 pos, vec3 dir, float maxLen)
     vec3 start = pos;
 
     int MaxIts = 1000000, i = 0;
-    float RefDist = 0.0;
 
     while (distance2(pos, start) < maxLen * maxLen && i < MaxIts)
     {
-        RefDist = intersection.MinDist;
         intersection = GetDistance(pos);
 
         if (intersection.MinDist <= ZERO)
@@ -357,7 +356,6 @@ INTERSECTION RayCast(vec3 pos, vec3 dir, float maxLen)
     intersection.NewDir = dir;
     intersection.N = GetNormal(intersection.Pos);
     // intersection.N = faceforward(intersection.N, pos - start, intersection.N);
-    intersection.RefDist = RefDist;
     intersection.N = normalize(intersection.N);
     return intersection;
 }
@@ -367,7 +365,6 @@ INTERSECTION RayCast(vec3 pos, vec3 dir, float maxLen)
 vec3 RayTrace(vec3 pos, vec3 dir, float maxLen)
 {
     vec3 color = vec3(1), n = vec3(0);
-    float PrevDist = 0.0;
 
     if (bool(Mode)) 
     {
@@ -390,15 +387,13 @@ vec3 RayTrace(vec3 pos, vec3 dir, float maxLen)
         return vec3(0, 0, 0);
     }
     
-    for (int i = 0; i < 10; i++) 
+    for (int i = 0; i < NumOfReflections; i++) 
     {
         INTERSECTION intersection = RayCast(pos + n * ZERO * 2.0, dir, maxLen);
 
         pos = intersection.Pos;
         dir = intersection.NewDir;
         n = intersection.N;
-
-        PrevDist = intersection.RefDist;
 
         // return (n + vec3(1.0)) * 0.5; 
 
@@ -446,8 +441,8 @@ vec3 RayTrace(vec3 pos, vec3 dir, float maxLen)
 
 vec3 ToneMap(vec3 col)
 {
-    float white = 4.0;
-    float exposure = 1.0;
+    float white = 2.0;
+    float exposure = 0.9;
 
 	col *= white * exposure;
 	col = (col * (1.0 + col / white / white)) / (1.0 + col);

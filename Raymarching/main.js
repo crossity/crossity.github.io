@@ -881,7 +881,7 @@
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         }
 
-        draw(framesStill, editObject, raysCount, mode) {
+        draw(framesStill, editObject, raysCount, mode, numOfReflections) {
             let rnd = this.mtl.shd.rnd;
 
             rnd.gl.disable(rnd.gl.DEPTH_TEST);
@@ -905,6 +905,8 @@
                 this.mtl.shd.rnd.gl.uniform1i(this.mtl.shd.uniforms["MaxRayCount"].loc, raysCount);
             if (applied && this.mtl.shd.uniforms["Mode"] != undefined)
                 this.mtl.shd.rnd.gl.uniform1i(this.mtl.shd.uniforms["Mode"].loc, mode);
+            if (applied && this.mtl.shd.uniforms["NumOfReflections"] != undefined)
+                this.mtl.shd.rnd.gl.uniform1i(this.mtl.shd.uniforms["NumOfReflections"].loc, numOfReflections);
 
             this.prim.draw(rnd);
             rnd.gl.enable(rnd.gl.DEPTH_TEST);
@@ -916,7 +918,7 @@
     let rm, rmshd, rmmtl;
 
     let framesStill = -1;
-    let mode = 1;
+    let mode = 1, numOfReflections = 4;
 
     function init() {
       console.log(hexToVec3(vec3ToHex(vec3(1, 0, 0))));
@@ -953,7 +955,7 @@
         framesStill = 1;
         */
 
-        rm.draw(framesStill, editObject, raysCount, mode);
+        rm.draw(framesStill, editObject, raysCount, mode, numOfReflections);
 
         rnd.renderEnd();
         window.requestAnimationFrame(draw);
@@ -1204,16 +1206,20 @@
 
     function vec3ToHex(v) {
         let hex = "#";
+        let str;
 
-        hex += Math.floor(v.x * 255).toString(16);
-        if (hex.length % 2 == 0)
-          hex += "0";
-        hex += Math.floor(v.y * 255).toString(16);
-        if (hex.length % 2 == 0)
-          hex += "0";
-        hex += Math.floor(v.z * 255).toString(16);
-        if (hex.length % 2 == 0)
-          hex += "0";
+        str = Math.floor(v.x * 255).toString(16);
+        if (str.length == 1)
+          str = "0" + str;
+        hex += str;
+        str = Math.floor(v.y * 255).toString(16);
+        if (str.length == 1)
+          str = "0" + str;
+        hex += str;
+        str = Math.floor(v.z * 255).toString(16);
+        if (str.length == 1)
+          str = "0" + str;
+        hex += str;
 
         return hex;
     }
@@ -1382,6 +1388,10 @@
 
       $("#rays-range").on("change", () => {
         raysCount = document.getElementById("rays-range").value;
+        framesStill = 1;
+      });
+      $("#reflections-range").on("change", () => {
+        numOfReflections = document.getElementById("reflections-range").value;
         framesStill = 1;
       });
 
