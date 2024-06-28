@@ -766,6 +766,8 @@
     const FIGURE_BOX    = 1;
     const FIGURE_PLANE  = 2;
     const FIGURE_MANDEL = 3;
+    const FIGURE_TORUS  = 4;
+    const FIGURE_OCTA   = 5;
 
     const OP_PUT = 0;
     const OP_SUB = 1;
@@ -1283,6 +1285,36 @@
           type: TYPE_BASIC, 
           k: 1.0,
           figure: FIGURE_MANDEL,
+          op: OP_PUT
+        });
+        framesStill = 1;
+
+        rm.updateTexture();
+      });
+
+      $("#torus-button").on("click", () => {
+        rm.objects.push({
+          pos: rnd.camera.dir.mul(5.0).add(rnd.camera.loc),
+          r: 1.0, 
+          color: vec3(0.9),
+          type: TYPE_BASIC, 
+          k: 1.0,
+          figure: FIGURE_TORUS,
+          op: OP_PUT
+        });
+        framesStill = 1;
+
+        rm.updateTexture();
+      });
+
+      $("#octa-button").on("click", () => {
+        rm.objects.push({
+          pos: rnd.camera.dir.mul(5.0).add(rnd.camera.loc),
+          r: 1.0, 
+          color: vec3(0.9),
+          type: TYPE_BASIC, 
+          k: 1.0,
+          figure: FIGURE_OCTA,
           op: OP_PUT
         });
         framesStill = 1;

@@ -87,6 +87,8 @@ vec3 RandomOnSphere(vec3 dir) {
 #define FIGURE_BOX       1
 #define FIGURE_PLANE     2
 #define FIGURE_MANDEL    3
+#define FIGURE_TORUS     4
+#define FIGURE_OCTA      5
 
 #define OP_PUT 0
 #define OP_SUB 1
@@ -218,6 +220,20 @@ float PlnaeDistance(vec3 n, float d, vec3 pos)
     return abs(dot(pos, n) - d);
 }
 
+float TorusDistance(vec3 c, float r, vec3 pos)
+{
+    pos -= c;
+    vec2 q = vec2(length(pos.xy) - r, pos.z);
+    return length(q) - r * 0.5;
+}
+
+float OctaDistance(vec3 c, float r, vec3 pos)
+{
+    pos -= c;
+    pos = abs(pos);
+    return (pos.x + pos.y+pos.z - r) * 0.57735027;
+}
+
 // Figures manager
 float DistanceHandler(int ObjectInd, vec3 pos)
 {
@@ -233,6 +249,11 @@ float DistanceHandler(int ObjectInd, vec3 pos)
         return PlnaeDistance(c, r, pos);
     else if (fig == FIGURE_MANDEL)
         return MandelDistance(c, r, pos);
+    else if (fig == FIGURE_TORUS)
+        return TorusDistance(c, r, pos);
+    else if (fig == FIGURE_OCTA)
+        return OctaDistance(c, r, pos);
+    return INF;
 }
 
 INTERSECTION SmoothUnion(INTERSECTION d1, INTERSECTION d2, float k)
@@ -430,7 +451,7 @@ vec3 RayTrace(vec3 pos, vec3 dir, float maxLen)
         else
         {
             color *= vec3(0.6, 0.6, 1);
-            if (i != 0)
+            if (i == 0)
                 OutIndex = vec4(1);
             return 0.0 * color;
         }
